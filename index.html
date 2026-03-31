@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Miss Mess Marketplace</title>
+  <meta name="description" content="Treasure hunting, reimagined. Discover estate sales, garage sales, and thrift stores near you." />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f0ebe2; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" src="miss-mess-marketplace.jsx" data-type="module"></script>
+  <script>
+    // Wait for Babel to load the component then render it
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        if (window.__APP_READY__) return;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(window.App || (() => React.createElement('div', null, 'Loading...'))));
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
