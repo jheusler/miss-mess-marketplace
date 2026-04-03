@@ -30,12 +30,17 @@ async function fetchThriftAndAntiques(lat, lng, radiusMiles) {
     node["shop"="charity"](around:${meters},${lat},${lng});
     node["shop"="second_hand"](around:${meters},${lat},${lng});
     node["shop"="antiques"](around:${meters},${lat},${lng});
+    node["shop"="vintage"](around:${meters},${lat},${lng});
+    node["shop"="thrift"](around:${meters},${lat},${lng});
+    node["amenity"="marketplace"](around:${meters},${lat},${lng});
     way["shop"="charity"](around:${meters},${lat},${lng});
     way["shop"="second_hand"](around:${meters},${lat},${lng});
     way["shop"="antiques"](around:${meters},${lat},${lng});
+    way["shop"="vintage"](around:${meters},${lat},${lng});
   );out body center;`;
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "data=" + encodeURIComponent(query),
   });
   const data = await res.json();
@@ -71,94 +76,70 @@ async function fetchThriftAndAntiques(lat, lng, radiusMiles) {
     });
 }
 
-// Fetch real Craigslist garage/yard sales via CORS proxy
-async function fetchCraigslistSales(lat, lng, radiusMiles) {
-  const PROXY = "https://api.allorigins.win/raw?url=";
-  const clUrl = `https://stlouis.craigslist.org/search/gss?lat=${lat}&lon=${lng}&search_distance=${Math.round(radiusMiles)}&format=rss`;
-  const res = await fetch(PROXY + encodeURIComponent(clUrl));
-  if (!res.ok) throw new Error("Craigslist fetch failed");
-  const text = await res.text();
-  const doc = new DOMParser().parseFromString(text, "text/xml");
-  const items = Array.from(doc.querySelectorAll("item"));
-  return items.slice(0, 20).map((item, i) => {
-    const title = item.querySelector("title")?.textContent?.trim() || "Garage Sale";
-    const link = item.querySelector("link")?.textContent?.trim() || "https://stlouis.craigslist.org";
-    const descRaw = item.querySelector("description")?.textContent || "";
-    const pubDate = item.querySelector("pubDate")?.textContent;
-    const dateStr = pubDate ? new Date(pubDate).toISOString().split("T")[0] : today;
-    // try to extract enclosure image
-    const enclosure = item.querySelector("enclosure");
-    const imgUrl = enclosure?.getAttribute("url") || "";
-    // try to pull geo coords from description HTML
-    const latM = descRaw.match(/data-latitude="([^"]+)"/);
-    const lonM = descRaw.match(/data-longitude="([^"]+)"/);
-    const iLat = latM ? parseFloat(latM[1]) : lat + (Math.random() - 0.5) * 0.06;
-    const iLon = lonM ? parseFloat(lonM[1]) : lng + (Math.random() - 0.5) * 0.06;
-    const cleanDesc = descRaw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240);
-    return {
-      id: `cl-${i}-${dateStr}`,
-      title,
-      type: "garage",
-      address: "See listing for address",
-      city: "St. Louis area",
-      state: "MO",
-      zip: "",
-      distance: haversine(lat, lng, iLat, iLon),
-      startDate: dateStr,
-      endDate: dateStr,
-      description: cleanDesc || "Garage/yard sale — tap to see full listing on Craigslist.",
-      source: "Craigslist",
-      url: link,
-      tags: [],
-      featured: false,
-      photos: imgUrl ? [imgUrl] : [],
-    };
-  });
-}
-
-// Fetch real estate sales from EstateSales.net via CORS proxy
-async function fetchEstateSales(lat, lng, radiusMiles) {
-  const PROXY = "https://api.allorigins.win/get?url=";
-  // EstateSales.net search by zip/location - try their search endpoint
-  const searchUrl = `https://www.estatesales.net/estate-sale-companies/sales?lat=${lat}&lng=${lng}&miles=${Math.round(radiusMiles)}`;
-  const res = await fetch(PROXY + encodeURIComponent(searchUrl));
-  if (!res.ok) throw new Error("EstateSales fetch failed");
-  const json = await res.json();
-  const html = json.contents;
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  // EstateSales.net sale cards typically have class "sale-item" or structured list items
-  const cards = Array.from(doc.querySelectorAll("[class*='sale'], [class*='listing'], article")).slice(0, 10);
-  if (cards.length === 0) throw new Error("No estate sale cards found");
-  return cards.map((card, i) => {
-    const titleEl = card.querySelector("h1,h2,h3,h4,.title,.name,a");
-    const addrEl = card.querySelector("[class*='addr'],[class*='location'],address");
-    const dateEl = card.querySelector("[class*='date'],[class*='time'],time");
-    const title = titleEl?.textContent?.trim() || "Estate Sale";
-    const address = addrEl?.textContent?.trim() || "St. Louis, MO";
-    const dateText = dateEl?.textContent?.trim() || "";
-    const linkEl = card.querySelector("a[href]");
-    const href = linkEl?.getAttribute("href") || "";
-    const url = href.startsWith("http") ? href : `https://www.estatesales.net${href}`;
-    return {
-      id: `es-live-${i}`,
-      title,
+// Generate gateway cards for active sales — links to live search on real platforms
+// (Craigslist and EstateSales.net block all browser CORS proxies; gateway cards are
+//  the reliable alternative for a static app — one tap opens a live pre-filtered search.)
+function generateGatewaySales(lat, lng, cityLabel) {
+  const city = cityLabel.replace(", MO", "").replace(", IL", "").trim();
+  const clBase = "https://stlouis.craigslist.org/search/gss";
+  const esBase = `https://www.estatesales.net/MO/${encodeURIComponent(city.replace(/ /g,"-"))}`;
+  const fbBase = `https://www.facebook.com/marketplace/stlouis/garage-sales`;
+  return [
+    {
+      id: "gw-estatesales",
+      title: `Estate Sales near ${city}`,
       type: "estate",
-      address,
-      city: "St. Louis",
+      address: "Multiple locations",
+      city,
       state: "MO",
       zip: "",
-      distance: i * 0.8 + 0.5, // approximate — no coords in HTML
+      distance: 0,
       startDate: today,
-      endDate: d(2),
-      description: dateText ? `Dates: ${dateText}` : "Estate sale — tap to view details on EstateSales.net.",
+      endDate: d(7),
+      description: `Tap to browse this weekend's estate sales near you on EstateSales.net — the largest estate sale listing site in the US.`,
       source: "EstateSales.net",
-      url,
-      tags: [],
-      featured: i < 2,
+      url: esBase,
+      tags: ["furniture","jewelry","collectibles","art","vintage"],
+      featured: true,
       photos: [],
-    };
-  });
+    },
+    {
+      id: "gw-craigslist",
+      title: `Garage & Yard Sales near ${city}`,
+      type: "garage",
+      address: "Multiple locations",
+      city,
+      state: "MO",
+      zip: "",
+      distance: 0.1,
+      startDate: today,
+      endDate: today,
+      description: `Tap to browse today's garage sales posted on Craigslist St. Louis — updated daily by locals.`,
+      source: "Craigslist",
+      url: clBase,
+      tags: ["tools","records","clothing","furniture","toys"],
+      featured: false,
+      photos: [],
+    },
+    {
+      id: "gw-facebook",
+      title: `Garage Sales on Facebook Marketplace`,
+      type: "garage",
+      address: "Multiple locations",
+      city,
+      state: "MO",
+      zip: "",
+      distance: 0.2,
+      startDate: today,
+      endDate: today,
+      description: `Tap to browse garage sale listings near you on Facebook Marketplace.`,
+      source: "Facebook Marketplace",
+      url: fbBase,
+      tags: ["garage sale","moving sale","yard sale"],
+      featured: false,
+      photos: [],
+    },
+  ];
 }
 
 const css = `
@@ -474,20 +455,19 @@ export default function App() {
     if (userLat === null || userLng === null) return;
     setSalesLoading(true);
     setSales([]);
-    Promise.allSettled([
-      fetchThriftAndAntiques(userLat, userLng, radius),
-      fetchCraigslistSales(userLat, userLng, radius),
-      fetchEstateSales(userLat, userLng, radius),
-    ]).then(([thriftRes, garageRes, estateRes]) => {
-      const thrift = thriftRes.status === "fulfilled" ? thriftRes.value : [];
-      const garage = garageRes.status === "fulfilled" ? garageRes.value : [];
-      const estate = estateRes.status === "fulfilled" ? estateRes.value : [];
-      const all = [...estate, ...garage, ...thrift].sort((a, b) => a.distance - b.distance);
-      setSales(all);
-      setSalesSources({ thrift: thrift.length, garage: garage.length, estate: estate.length });
-      setSalesLoading(false);
-    });
-  }, [userLat, userLng, radius]);
+    const gateways = generateGatewaySales(userLat, userLng, locationLabel);
+    fetchThriftAndAntiques(userLat, userLng, radius)
+      .then(thrift => {
+        const all = [...gateways, ...thrift].sort((a, b) => a.distance - b.distance);
+        setSales(all);
+        setSalesSources({ thrift: thrift.length, garage: 2, estate: 1 });
+      })
+      .catch(() => {
+        setSales(gateways);
+        setSalesSources({ thrift: 0, garage: 2, estate: 1 });
+      })
+      .finally(() => setSalesLoading(false));
+  }, [userLat, userLng, radius, locationLabel]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
