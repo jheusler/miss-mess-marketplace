@@ -3,37 +3,6 @@ import { useState, useRef, useCallback, useEffect } from "react";
 const today = new Date().toISOString().split("T")[0];
 const d = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().split("T")[0]; };
 
-// Using picsum.photos — works in all environments including artifacts
-const EP = [
-  "https://picsum.photos/seed/estate1/600/400",
-  "https://picsum.photos/seed/estate2/600/400",
-  "https://picsum.photos/seed/estate3/600/400",
-  "https://picsum.photos/seed/estate4/600/400",
-];
-const GP = [
-  "https://picsum.photos/seed/garage1/600/400",
-  "https://picsum.photos/seed/garage2/600/400",
-  "https://picsum.photos/seed/garage3/600/400",
-];
-const TP = [
-  "https://picsum.photos/seed/thrift1/600/400",
-  "https://picsum.photos/seed/thrift2/600/400",
-  "https://picsum.photos/seed/thrift3/600/400",
-];
-
-const MOCK_SALES = [
-  { id:"es-001", title:"Stunning Mid-Century Modern Estate Sale", type:"estate", address:"4521 Lindell Blvd", city:"St. Louis", state:"MO", zip:"63108", distance:0.8, startDate:today, endDate:d(1), description:"Mid-century modern collection: Herman Miller chairs, Eames-era furniture, Danish modern pieces, vintage electronics, and a 50-year art collection. Hosted by a retired professor. Everything priced to sell.", source:"EstateSales.net", url:"https://www.estatesales.net", tags:["mid-century modern","furniture","art","collectibles"], featured:true, photos:[EP[0],EP[1],EP[2],EP[3]] },
-  { id:"es-002", title:"Forest Hills Estate — Antiques & Vintage Jewelry", type:"estate", address:"275 Forest Hills Dr", city:"Ladue", state:"MO", zip:"63124", distance:2.4, startDate:today, endDate:d(1), description:"Antique jewelry, sterling silver flatware, Victorian furniture, vintage clothing, china sets, and first-edition books. Estate of a lifelong collector. Jewelry appraised and tagged.", source:"EstateSales.net", url:"https://www.estatesales.net", tags:["jewelry","silver","Victorian","books","china"], featured:true, photos:[EP[1],EP[3],EP[0]] },
-  { id:"gs-001", title:"Multi-Family Garage Sale — Tools & Collectibles", type:"garage", address:"1847 Skinker Blvd", city:"St. Louis", state:"MO", zip:"63110", distance:1.2, startDate:today, endDate:today, description:"4 families! Vintage tools, old toys, sports memorabilia, vintage kitchen items, records, and books. Early birds welcome! Cash preferred.", source:"Craigslist", url:"https://stlouis.craigslist.org", tags:["tools","toys","records","sports"], featured:false, photos:[GP[0],GP[1],GP[2]] },
-  { id:"gs-002", title:"Moving Sale — Everything Must Go!", type:"garage", address:"5640 Westminster Place", city:"St. Louis", state:"MO", zip:"63112", distance:1.9, startDate:today, endDate:d(1), description:"Relocating overseas. Mid-century furniture, 500+ vinyl records, vintage cameras, antique maps, and household items. Serious offers welcome.", source:"Facebook Marketplace", url:"https://www.facebook.com/marketplace", tags:["records","cameras","maps","furniture"], featured:false, photos:[GP[1],GP[0]] },
-  { id:"tt-001", title:"Goodwill — Forest Park Area", type:"thrift", address:"4340 Lindell Blvd", city:"St. Louis", state:"MO", zip:"63108", distance:0.5, startDate:today, endDate:d(7), description:"Large Goodwill near Forest Park. Housewares, clothing, books. New items stocked daily. Senior discount Tuesdays.", source:"Thrift Store", url:"https://www.goodwill.org", tags:["goodwill","clothing","housewares","books"], featured:false, photos:TP },
-  { id:"tt-002", title:"St. Vincent de Paul — South City", type:"thrift", address:"3008 Meramec St", city:"St. Louis", state:"MO", zip:"63118", distance:3.1, startDate:today, endDate:d(7), description:"SVdP known for furniture, vintage housewares, and excellent antique finds. Half-price Saturdays on clothing.", source:"Thrift Store", url:"https://www.svdpusa.org", tags:["SVdP","furniture","antiques","half-price"], featured:false, photos:[TP[1],TP[0]] },
-  { id:"es-003", title:"Clayton Estate — Fine Art & Silver Collection", type:"estate", address:"7825 Maryland Ave", city:"Clayton", state:"MO", zip:"63105", distance:3.7, startDate:d(1), endDate:d(7), description:"Estate of an art collector. Original oil paintings, bronze sculptures, silver collection, antique instruments, and rare Missouri maps.", source:"EstateSales.net", url:"https://www.estatesales.net", tags:["fine art","oil paintings","bronze","silver","maps"], featured:true, photos:[EP[2],EP[0],EP[1]] },
-  { id:"gs-003", title:"Neighborhood Block Sale — Vintage & Retro", type:"garage", address:"2211 Magnolia Ave", city:"St. Louis", state:"MO", zip:"63104", distance:2.8, startDate:d(1), endDate:d(1), description:"8+ homes participating! 70s–80s collectibles, vintage clothing, vinyl records, and vintage video games.", source:"Facebook Marketplace", url:"https://www.facebook.com/marketplace", tags:["retro","70s","80s","records","video games"], featured:false, photos:GP },
-  { id:"tt-003", title:"Savers — Manchester Road", type:"thrift", address:"12639 Manchester Rd", city:"Des Peres", state:"MO", zip:"63131", distance:7.2, startDate:today, endDate:d(7), description:"Large Savers with great housewares and kitchenware. Rotating stock and weekend sales.", source:"Thrift Store", url:"https://www.savers.com", tags:["savers","housewares","kitchenware"], featured:false, photos:TP },
-  { id:"es-004", title:"Webster Groves Estate — Vintage Kitchen & Garden", type:"estate", address:"555 Elm Ave", city:"Webster Groves", state:"MO", zip:"63119", distance:5.6, startDate:d(1), endDate:d(7), description:"Vintage kitchen collection: cast iron, Pyrex, enamelware, vintage garden tools, pottery, and farmhouse décor.", source:"EstateSales.net", url:"https://www.estatesales.net", tags:["vintage kitchen","cast iron","Pyrex","enamelware","garden"], featured:false, photos:[EP[3],EP[0]] },
-];
-
 const FOLDERS = ["My Finds","Furniture","Jewelry","Art & Decor","Vintage","Electronics"];
 const MAX_PHOTOS = 4;
 const FILTERS = ["all","estate","garage","thrift"];
@@ -43,6 +12,154 @@ const NEGOTIATION_TIPS = {
   garage:["Early birds get best picks, late birds get best prices","Make a reasonable first offer (20–30% below asking)","Ask if prices are firm or negotiable upfront","Buy in bundles — offer one price for a group","Be friendly and conversational — it helps get deals"],
   thrift:["Check color tag rotation for 50% off days","Visit on restock days (often Mon/Tue) for best selection","Look for hidden gems in electronics and housewares","Check inside pots/containers for items hiding inside","Senior discount days can be combined with sale days"],
 };
+
+// ── Real data helpers ──────────────────────────────────────────────────────────
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Fetch real thrift stores & antique shops from OpenStreetMap Overpass API
+async function fetchThriftAndAntiques(lat, lng, radiusMiles) {
+  const meters = Math.round(radiusMiles * 1609.34);
+  const query = `[out:json][timeout:25];(
+    node["shop"="charity"](around:${meters},${lat},${lng});
+    node["shop"="second_hand"](around:${meters},${lat},${lng});
+    node["shop"="antiques"](around:${meters},${lat},${lng});
+    way["shop"="charity"](around:${meters},${lat},${lng});
+    way["shop"="second_hand"](around:${meters},${lat},${lng});
+    way["shop"="antiques"](around:${meters},${lat},${lng});
+  );out body center;`;
+  const res = await fetch("https://overpass-api.de/api/interpreter", {
+    method: "POST",
+    body: "data=" + encodeURIComponent(query),
+  });
+  const data = await res.json();
+  return data.elements
+    .filter(el => el.tags?.name)
+    .map(el => {
+      const elLat = el.lat ?? el.center?.lat;
+      const elLon = el.lon ?? el.center?.lon;
+      const t = el.tags || {};
+      const shopType = t.shop || "thrift";
+      const typeLabel = shopType === "antiques" ? "Antique Shop" : shopType === "charity" ? "Charity Thrift" : "Second-Hand Store";
+      const typeDesc = shopType === "antiques" ? "Antique shop" : shopType === "charity" ? "Charity thrift shop" : "Second-hand store";
+      const hours = t.opening_hours ? ` Hours: ${t.opening_hours}.` : "";
+      const brand = t.brand || t.operator || "";
+      return {
+        id: `osm-${el.id}`,
+        title: t.name,
+        type: "thrift",
+        address: [t["addr:housenumber"], t["addr:street"]].filter(Boolean).join(" ") || "See map",
+        city: t["addr:city"] || "St. Louis",
+        state: t["addr:state"] || "MO",
+        zip: t["addr:postcode"] || "",
+        distance: haversine(lat, lng, elLat, elLon),
+        startDate: today,
+        endDate: d(365),
+        description: `${typeDesc}${brand ? " — " + brand : ""}.${hours}`,
+        source: "OpenStreetMap",
+        url: t.website || t["contact:website"] || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.name + " " + (t["addr:city"] || "St. Louis"))}`,
+        tags: [typeLabel, brand].filter(Boolean),
+        featured: false,
+        photos: [],
+      };
+    });
+}
+
+// Fetch real Craigslist garage/yard sales via CORS proxy
+async function fetchCraigslistSales(lat, lng, radiusMiles) {
+  const PROXY = "https://api.allorigins.win/raw?url=";
+  const clUrl = `https://stlouis.craigslist.org/search/gss?lat=${lat}&lon=${lng}&search_distance=${Math.round(radiusMiles)}&format=rss`;
+  const res = await fetch(PROXY + encodeURIComponent(clUrl));
+  if (!res.ok) throw new Error("Craigslist fetch failed");
+  const text = await res.text();
+  const doc = new DOMParser().parseFromString(text, "text/xml");
+  const items = Array.from(doc.querySelectorAll("item"));
+  return items.slice(0, 20).map((item, i) => {
+    const title = item.querySelector("title")?.textContent?.trim() || "Garage Sale";
+    const link = item.querySelector("link")?.textContent?.trim() || "https://stlouis.craigslist.org";
+    const descRaw = item.querySelector("description")?.textContent || "";
+    const pubDate = item.querySelector("pubDate")?.textContent;
+    const dateStr = pubDate ? new Date(pubDate).toISOString().split("T")[0] : today;
+    // try to extract enclosure image
+    const enclosure = item.querySelector("enclosure");
+    const imgUrl = enclosure?.getAttribute("url") || "";
+    // try to pull geo coords from description HTML
+    const latM = descRaw.match(/data-latitude="([^"]+)"/);
+    const lonM = descRaw.match(/data-longitude="([^"]+)"/);
+    const iLat = latM ? parseFloat(latM[1]) : lat + (Math.random() - 0.5) * 0.06;
+    const iLon = lonM ? parseFloat(lonM[1]) : lng + (Math.random() - 0.5) * 0.06;
+    const cleanDesc = descRaw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240);
+    return {
+      id: `cl-${i}-${dateStr}`,
+      title,
+      type: "garage",
+      address: "See listing for address",
+      city: "St. Louis area",
+      state: "MO",
+      zip: "",
+      distance: haversine(lat, lng, iLat, iLon),
+      startDate: dateStr,
+      endDate: dateStr,
+      description: cleanDesc || "Garage/yard sale — tap to see full listing on Craigslist.",
+      source: "Craigslist",
+      url: link,
+      tags: [],
+      featured: false,
+      photos: imgUrl ? [imgUrl] : [],
+    };
+  });
+}
+
+// Fetch real estate sales from EstateSales.net via CORS proxy
+async function fetchEstateSales(lat, lng, radiusMiles) {
+  const PROXY = "https://api.allorigins.win/get?url=";
+  // EstateSales.net search by zip/location - try their search endpoint
+  const searchUrl = `https://www.estatesales.net/estate-sale-companies/sales?lat=${lat}&lng=${lng}&miles=${Math.round(radiusMiles)}`;
+  const res = await fetch(PROXY + encodeURIComponent(searchUrl));
+  if (!res.ok) throw new Error("EstateSales fetch failed");
+  const json = await res.json();
+  const html = json.contents;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  // EstateSales.net sale cards typically have class "sale-item" or structured list items
+  const cards = Array.from(doc.querySelectorAll("[class*='sale'], [class*='listing'], article")).slice(0, 10);
+  if (cards.length === 0) throw new Error("No estate sale cards found");
+  return cards.map((card, i) => {
+    const titleEl = card.querySelector("h1,h2,h3,h4,.title,.name,a");
+    const addrEl = card.querySelector("[class*='addr'],[class*='location'],address");
+    const dateEl = card.querySelector("[class*='date'],[class*='time'],time");
+    const title = titleEl?.textContent?.trim() || "Estate Sale";
+    const address = addrEl?.textContent?.trim() || "St. Louis, MO";
+    const dateText = dateEl?.textContent?.trim() || "";
+    const linkEl = card.querySelector("a[href]");
+    const href = linkEl?.getAttribute("href") || "";
+    const url = href.startsWith("http") ? href : `https://www.estatesales.net${href}`;
+    return {
+      id: `es-live-${i}`,
+      title,
+      type: "estate",
+      address,
+      city: "St. Louis",
+      state: "MO",
+      zip: "",
+      distance: i * 0.8 + 0.5, // approximate — no coords in HTML
+      startDate: today,
+      endDate: d(2),
+      description: dateText ? `Dates: ${dateText}` : "Estate sale — tap to view details on EstateSales.net.",
+      source: "EstateSales.net",
+      url,
+      tags: [],
+      featured: i < 2,
+      photos: [],
+    };
+  });
+}
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
@@ -54,6 +171,7 @@ const css = `
     --text:#2a1f14; --text-secondary:#6b5a4a; --text-muted:#9b8878;
     --surface:#faf7f2; --border:rgba(92,61,46,0.12); --border-strong:rgba(92,61,46,0.22);
     --shadow:0 2px 16px rgba(44,31,20,0.08); --shadow-lg:0 8px 32px rgba(44,31,20,0.14);
+    --estate:#a0522d; --garage:#2d4a3e; --thrift:#6b4c8a;
   }
   .app { max-width:430px; margin:0 auto; min-height:100vh; background:var(--cream); position:relative; overflow-x:hidden; }
 
@@ -76,6 +194,7 @@ const css = `
   .location-bar:hover { border-color:var(--forest); }
   .location-bar-text { flex:1; font-size:13px; color:var(--text); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .location-status { font-size:11px; font-weight:600; padding:3px 8px; border-radius:100px; white-space:nowrap; }
+  .location-status.idle { background:rgba(160,82,45,0.1); color:var(--terracotta); }
   .location-status.locating { background:rgba(45,74,62,0.1); color:var(--forest); }
   .location-status.located { background:rgba(45,74,62,0.15); color:var(--forest); }
   .location-status.error { background:rgba(160,82,45,0.1); color:var(--terracotta); }
@@ -90,24 +209,36 @@ const css = `
   .filter-row::-webkit-scrollbar { display:none; }
   .filter-chip { padding:7px 16px; border-radius:100px; font-size:12px; font-weight:600; white-space:nowrap; cursor:pointer; border:1.5px solid var(--border-strong); background:transparent; color:var(--text-secondary); transition:all 0.2s; }
   .filter-chip.active-all { background:var(--forest); color:var(--cream); border-color:var(--forest); }
-  .filter-chip.active-estate { background:#a0522d; color:white; border-color:#a0522d; }
-  .filter-chip.active-garage { background:var(--forest); color:white; border-color:var(--forest); }
-  .filter-chip.active-thrift { background:#6b4c8a; color:white; border-color:#6b4c8a; }
+  .filter-chip.active-estate { background:var(--estate); color:white; border-color:var(--estate); }
+  .filter-chip.active-garage { background:var(--garage); color:white; border-color:var(--garage); }
+  .filter-chip.active-thrift { background:var(--thrift); color:white; border-color:var(--thrift); }
   .sales-list { padding:12px 0 100px; }
+
+  /* LOADING */
+  .feed-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:56px 24px; gap:14px; }
+  .feed-spinner { width:36px; height:36px; border:3px solid rgba(45,74,62,0.15); border-top-color:var(--forest); border-radius:50%; animation:spin 0.8s linear infinite; }
+  .feed-loading-text { font-family:'Playfair Display',serif; font-size:16px; color:var(--text-secondary); text-align:center; }
+  .feed-loading-sub { font-size:12px; color:var(--text-muted); text-align:center; }
+
+  /* SOURCE BANNER */
+  .source-banner { display:flex; align-items:center; gap:10px; background:rgba(45,74,62,0.06); border:1px solid rgba(45,74,62,0.12); border-radius:12px; padding:10px 14px; margin:0 14px 12px; }
+  .source-banner-text { font-size:12px; color:var(--text-secondary); flex:1; line-height:1.4; }
+  .source-banner-link { font-size:12px; font-weight:700; color:var(--terracotta); white-space:nowrap; cursor:pointer; background:none; border:none; font-family:'DM Sans',sans-serif; }
 
   /* SALE CARD */
   .sale-card { background:var(--surface); margin:0 14px 12px; border-radius:18px; overflow:hidden; border:1px solid var(--border); box-shadow:var(--shadow); cursor:pointer; transition:all 0.2s; position:relative; }
   .sale-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-lg); }
   .sale-card:active { transform:scale(0.985); }
   .sale-hero { width:100%; height:160px; object-fit:cover; display:block; }
+  .sale-hero-placeholder { width:100%; height:90px; background:linear-gradient(135deg,var(--cream-dark),var(--cream)); display:flex; align-items:center; justify-content:center; font-size:32px; }
   .featured-badge { position:absolute; top:12px; left:12px; background:var(--terracotta); color:white; font-size:9px; font-weight:700; letter-spacing:0.08em; padding:4px 10px; border-radius:100px; }
   .photo-count-badge { position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.5); color:white; font-size:10px; font-weight:600; padding:3px 8px; border-radius:100px; }
   .sale-card-body { padding:14px; }
   .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
   .type-badge { display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:100px; font-size:11px; font-weight:600; }
-  .type-badge.estate { background:rgba(160,82,45,0.1); color:#a0522d; }
-  .type-badge.garage { background:rgba(45,74,62,0.1); color:var(--forest); }
-  .type-badge.thrift { background:rgba(107,76,138,0.1); color:#6b4c8a; }
+  .type-badge.estate { background:rgba(160,82,45,0.1); color:var(--estate); }
+  .type-badge.garage { background:rgba(45,74,62,0.1); color:var(--garage); }
+  .type-badge.thrift { background:rgba(107,76,138,0.1); color:var(--thrift); }
   .card-right { display:flex; align-items:center; gap:8px; }
   .date-badge { padding:3px 8px; border-radius:6px; background:var(--cream-dark); font-size:10px; font-weight:600; color:var(--text-muted); }
   .date-badge.today { background:rgba(45,74,62,0.12); color:var(--forest); }
@@ -231,14 +362,12 @@ const css = `
 
   /* FINDS */
   .finds-page { padding:16px 16px 100px; }
-  .finds-section-title { font-family:'Playfair Display',serif; font-size:18px; color:var(--text); margin-bottom:12px; display:flex; align-items:center; gap:8px; }
-  .finds-divider { height:1px; background:var(--border); margin:20px 0; }
   .folder-tabs { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; margin-bottom:16px; scrollbar-width:none; }
   .folder-tabs::-webkit-scrollbar { display:none; }
   .folder-chip { padding:7px 15px; border-radius:100px; font-size:12px; font-weight:600; white-space:nowrap; cursor:pointer; border:1.5px solid var(--border-strong); background:transparent; color:var(--text-secondary); transition:all 0.2s; }
   .folder-chip.active { background:var(--forest); color:var(--cream); border-color:var(--forest); }
   .finds-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  .find-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow); cursor:pointer; transition:all 0.2s; }
+  .find-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow); transition:all 0.2s; }
   .find-card:hover { transform:translateY(-2px); }
   .find-img { width:100%; height:110px; object-fit:cover; }
   .find-info { padding:10px; }
@@ -246,8 +375,8 @@ const css = `
   .find-price { font-size:11px; color:var(--terracotta); font-weight:600; }
   .find-meta { font-size:10px; color:var(--text-muted); margin-top:2px; }
 
-  /* SAVED SALES CARDS */
-  .saved-sale-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow); cursor:pointer; display:flex; gap:0; margin-bottom:10px; transition:all 0.2s; }
+  /* SAVED SALES */
+  .saved-sale-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow); cursor:pointer; display:flex; margin-bottom:10px; transition:all 0.2s; }
   .saved-sale-card:hover { transform:translateY(-1px); box-shadow:var(--shadow-lg); }
   .saved-sale-img { width:90px; height:90px; object-fit:cover; flex-shrink:0; }
   .saved-sale-info { padding:12px; flex:1; min-width:0; }
@@ -299,12 +428,8 @@ function PhotoGallery({ photos }) {
   );
 }
 
-// ── localStorage helpers ─────────────────────────────────────────────────────
 function loadFromStorage(key, fallback) {
-  try {
-    const val = localStorage.getItem(key);
-    return val ? JSON.parse(val) : fallback;
-  } catch { return fallback; }
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
 function saveToStorage(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
@@ -315,36 +440,66 @@ export default function App() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [radius, setRadius] = useState(10);
-  const [locationLabel, setLocationLabel] = useState("Forest Park, St. Louis, MO");
-  const [locationStatus, setLocationStatus] = useState("located");
+  const [locationLabel, setLocationLabel] = useState("Tap to find sales near you");
+  const [locationStatus, setLocationStatus] = useState("idle");
+  const [userLat, setUserLat] = useState(null);
+  const [userLng, setUserLng] = useState(null);
+  const [sales, setSales] = useState([]);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [salesSources, setSalesSources] = useState({ thrift: 0, garage: 0, estate: 0 });
   const [selectedSale, setSelectedSale] = useState(null);
-  const [savedSales, setSavedSales] = useState(() => loadFromStorage('mmm_saved_sales', []));
+  const [savedSales, setSavedSales] = useState(() => loadFromStorage("mmm_saved_sales", []));
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [selectedFolder, setSelectedFolder] = useState("My Finds");
-  const [savedFinds, setSavedFinds] = useState(() => loadFromStorage('mmm_saved_finds', []));
+  const [savedFinds, setSavedFinds] = useState(() => loadFromStorage("mmm_saved_finds", []));
   const [savedThisItem, setSavedThisItem] = useState(false);
   const [toast, setToast] = useState(null);
   const [activeFolder, setActiveFolder] = useState("All");
   const [dragOver, setDragOver] = useState(false);
-  const [findsTab, setFindsTab] = useState("items"); // "items" | "sales"
+  const [findsTab, setFindsTab] = useState("items");
 
   const fileRef = useRef();
   const cameraRef = useRef();
 
-  // Save to localStorage whenever saved data changes
-  useEffect(() => { saveToStorage('mmm_saved_sales', savedSales); }, [savedSales]);
-  useEffect(() => { saveToStorage('mmm_saved_finds', savedFinds); }, [savedFinds]);
+  useEffect(() => { saveToStorage("mmm_saved_sales", savedSales); }, [savedSales]);
+  useEffect(() => { saveToStorage("mmm_saved_finds", savedFinds); }, [savedFinds]);
+
+  // Auto-request location on first load
+  useEffect(() => { getLocation(); }, []);
+
+  // Re-fetch real listings whenever location or radius changes
+  useEffect(() => {
+    if (userLat === null || userLng === null) return;
+    setSalesLoading(true);
+    setSales([]);
+    Promise.allSettled([
+      fetchThriftAndAntiques(userLat, userLng, radius),
+      fetchCraigslistSales(userLat, userLng, radius),
+      fetchEstateSales(userLat, userLng, radius),
+    ]).then(([thriftRes, garageRes, estateRes]) => {
+      const thrift = thriftRes.status === "fulfilled" ? thriftRes.value : [];
+      const garage = garageRes.status === "fulfilled" ? garageRes.value : [];
+      const estate = estateRes.status === "fulfilled" ? estateRes.value : [];
+      const all = [...estate, ...garage, ...thrift].sort((a, b) => a.distance - b.distance);
+      setSales(all);
+      setSalesSources({ thrift: thrift.length, garage: garage.length, estate: estate.length });
+      setSalesLoading(false);
+    });
+  }, [userLat, userLng, radius]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
   const getLocation = () => {
     if (!navigator.geolocation) { setLocationStatus("error"); setLocationLabel("Geolocation not supported"); return; }
-    setLocationStatus("locating"); setLocationLabel("Finding your location...");
+    setLocationStatus("locating");
+    setLocationLabel("Finding your location...");
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
+        setUserLat(latitude);
+        setUserLng(longitude);
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
           const data = await res.json();
@@ -354,24 +509,29 @@ export default function App() {
         } catch { setLocationLabel(`${latitude.toFixed(3)}, ${longitude.toFixed(3)}`); }
         setLocationStatus("located");
       },
-      () => { setLocationStatus("error"); setLocationLabel("Couldn't get location — tap to retry"); },
+      () => {
+        setLocationStatus("error");
+        setLocationLabel("Location unavailable — tap to retry");
+      },
       { timeout: 10000 }
     );
   };
 
-  const typeLabel = (t) => t==="estate"?"Estate Sale":t==="garage"?"Garage Sale":"Thrift Store";
-  const typeIcon = (t) => t==="estate"?"🏠":t==="garage"?"🏷️":"🛍️";
-  const isToday = (s) => s.startDate===today||(s.endDate>=today&&s.startDate<=today);
+  const typeLabel = (t) => t==="estate"?"Estate Sale":t==="garage"?"Garage Sale":"Thrift / Antique";
+  const typeIcon  = (t) => t==="estate"?"🏠":t==="garage"?"🏷️":"🛍️";
+  const isToday   = (s) => s.startDate===today||(s.endDate>=today&&s.startDate<=today);
 
-  const filteredSales = MOCK_SALES.filter(s => {
+  const filteredSales = sales.filter(s => {
     const matchFilter = filter==="all"||s.type===filter;
     const matchRadius = s.distance<=radius;
-    const matchSearch = !search||s.title.toLowerCase().includes(search.toLowerCase())||s.city.toLowerCase().includes(search.toLowerCase())||s.tags?.some(t=>t.toLowerCase().includes(search.toLowerCase()));
+    const matchSearch = !search||
+      s.title.toLowerCase().includes(search.toLowerCase())||
+      s.city.toLowerCase().includes(search.toLowerCase())||
+      s.tags?.some(t=>t.toLowerCase().includes(search.toLowerCase()));
     return matchFilter&&matchRadius&&matchSearch;
   });
 
   const isSaleSaved = (id) => savedSales.some(s => s.id===id);
-
   const toggleSaveSale = (sale) => {
     if (isSaleSaved(sale.id)) {
       setSavedSales(prev => prev.filter(s => s.id!==sale.id));
@@ -397,7 +557,8 @@ export default function App() {
     try {
       const imageBlocks = photos.map(p => ({ type:"image", source:{ type:"base64", media_type:p.mimeType, data:p.dataUrl.split(",")[1] } }));
       const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{ "Content-Type":"application/json" },
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "x-api-key": window.__ANTHROPIC_KEY__ || "", "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
         body: JSON.stringify({
           model:"claude-sonnet-4-20250514", max_tokens:1000,
           messages:[{ role:"user", content:[...imageBlocks,{ type:"text", text:`You are an expert antiques appraiser and resale specialist. Analyze this item using eBay sold listings as your primary pricing reference. Respond ONLY with valid JSON, no markdown:\n{"name":"specific item name","era":"decade or Modern","originalPrice":"$XX–$XX","buyPrice":"$XX–$XX","resellPrice":"$XX–$XX (eBay comps)","facts":"2-3 sentences on history, value, and what to look for."}` }] }]
@@ -407,7 +568,9 @@ export default function App() {
       if (data.error) throw new Error(data.error.message);
       const text = data.content?.find(b=>b.type==="text")?.text||"";
       setResult(JSON.parse(text.replace(/```json|```/g,"").trim()));
-    } catch { setResult({ error:"Couldn't analyze this image. Try again with a clearer photo." }); }
+    } catch (err) {
+      setResult({ error: err.message?.includes("401") ? "API key needed — add your Anthropic key to get item values." : "Couldn't analyze this image. Try again with a clearer photo." });
+    }
     setLoading(false);
   };
 
@@ -418,7 +581,6 @@ export default function App() {
     showToast(`Saved to "${selectedFolder}" ✓`);
   };
 
-  const canAddMore = photos.length < MAX_PHOTOS;
   const folderOptions = ["All",...FOLDERS];
   const filteredFinds = activeFolder==="All" ? savedFinds : savedFinds.filter(f=>f.folder===activeFolder);
 
@@ -452,7 +614,7 @@ export default function App() {
                 <span style={{fontSize:16}}>📍</span>
                 <span className="location-bar-text">{locationLabel}</span>
                 <span className={`location-status ${locationStatus}`}>
-                  {locationStatus==="locating"?"⏳ Locating...":locationStatus==="located"?"✓ Located":"Tap to locate"}
+                  {locationStatus==="locating"?"⏳ Locating...":locationStatus==="located"?"✓ Located":locationStatus==="idle"?"Tap to locate":"Retry"}
                 </span>
               </div>
               <div className="radius-row">
@@ -474,47 +636,72 @@ export default function App() {
             </div>
 
             <div className="sales-list">
-              {filteredSales.length===0 ? (
+              {salesLoading ? (
+                <div className="feed-loading">
+                  <div className="feed-spinner" />
+                  <div className="feed-loading-text">Finding sales near you…</div>
+                  <div className="feed-loading-sub">Checking Craigslist, EstateSales.net & local shops</div>
+                </div>
+              ) : filteredSales.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-icon">📍</div>
-                  <div className="empty-title">No sales within {radius} miles</div>
-                  <div className="empty-sub">Try expanding your radius or a different filter</div>
+                  <div className="empty-icon">{locationStatus==="idle"?"📍":"🔍"}</div>
+                  <div className="empty-title">{locationStatus==="idle"?"Enable location to find sales":"No sales found nearby"}</div>
+                  <div className="empty-sub">{locationStatus==="idle"?"Tap the location bar above to find real listings near you.":"Try expanding your radius or a different filter."}</div>
                 </div>
-              ) : filteredSales.map(sale => (
-                <div key={sale.id} className="sale-card" onClick={() => setSelectedSale(sale)}>
-                  {sale.photos?.[0] && <img className="sale-hero" src={sale.photos[0]} alt={sale.title} />}
-                  {sale.featured && <div className="featured-badge">⭐ FEATURED</div>}
-                  {sale.photos?.length>1 && <div className="photo-count-badge">📷 {sale.photos.length}</div>}
-                  <div className="sale-card-body">
-                    <div className="card-header">
-                      <div className={`type-badge ${sale.type}`}>{typeIcon(sale.type)} {typeLabel(sale.type)}</div>
-                      <div className="card-right">
-                        <div className={`date-badge ${isToday(sale)?"today":""}`}>{isToday(sale)?"TODAY":sale.startDate}</div>
-                        <button className="heart-btn" onClick={e=>{e.stopPropagation();toggleSaveSale(sale);}}>
-                          {isSaleSaved(sale.id)?"❤️":"🤍"}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="card-title">{sale.title}</div>
-                    <div className="card-loc">
-                      <span style={{fontSize:13}}>📍</span>
-                      <span className="card-loc-text">{sale.address}, {sale.city}</span>
-                      <span className="dist-pill">{sale.distance.toFixed(1)} mi</span>
-                    </div>
-                    {sale.description && <div className="card-desc">{sale.description}</div>}
-                    {sale.tags?.length>0 && (
-                      <div className="card-tags">
-                        {sale.tags.slice(0,4).map(t=><span key={t} className="card-tag">{t}</span>)}
-                        {sale.tags.length>4&&<span style={{fontSize:11,color:"var(--text-muted)",alignSelf:"center"}}>+{sale.tags.length-4}</span>}
-                      </div>
-                    )}
-                    <div className="card-footer">
-                      <span className="card-source">🌐 {sale.source}</span>
-                      <span className="see-details">See details ›</span>
-                    </div>
+              ) : (
+                <>
+                  {/* Live data source summary */}
+                  <div className="source-banner">
+                    <span>📡</span>
+                    <span className="source-banner-text">
+                      Live: {salesSources.estate > 0 ? `${salesSources.estate} estate sale${salesSources.estate!==1?"s":""}, ` : ""}
+                      {salesSources.garage > 0 ? `${salesSources.garage} garage sale${salesSources.garage!==1?"s":""}, ` : ""}
+                      {salesSources.thrift > 0 ? `${salesSources.thrift} thrift/antique store${salesSources.thrift!==1?"s":""} ` : ""}
+                      near you
+                    </span>
+                    <button className="source-banner-link" onClick={() => window.open("https://www.estatesales.net/MO/St-Louis","_blank")}>+ Estate Sales</button>
                   </div>
-                </div>
-              ))}
+
+                  {filteredSales.map(sale => (
+                    <div key={sale.id} className="sale-card" onClick={() => setSelectedSale(sale)}>
+                      {sale.photos?.[0]
+                        ? <img className="sale-hero" src={sale.photos[0]} alt={sale.title} onError={e=>{e.target.style.display="none";}} />
+                        : <div className="sale-hero-placeholder">{typeIcon(sale.type)}</div>
+                      }
+                      {sale.featured && <div className="featured-badge">⭐ FEATURED</div>}
+                      {sale.photos?.length > 1 && <div className="photo-count-badge">📷 {sale.photos.length}</div>}
+                      <div className="sale-card-body">
+                        <div className="card-header">
+                          <div className={`type-badge ${sale.type}`}>{typeIcon(sale.type)} {typeLabel(sale.type)}</div>
+                          <div className="card-right">
+                            <div className={`date-badge ${isToday(sale)?"today":""}`}>{isToday(sale)?"TODAY":sale.startDate}</div>
+                            <button className="heart-btn" onClick={e=>{e.stopPropagation();toggleSaveSale(sale);}}>
+                              {isSaleSaved(sale.id)?"❤️":"🤍"}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="card-title">{sale.title}</div>
+                        <div className="card-loc">
+                          <span style={{fontSize:13}}>📍</span>
+                          <span className="card-loc-text">{sale.address}, {sale.city}</span>
+                          <span className="dist-pill">{sale.distance.toFixed(1)} mi</span>
+                        </div>
+                        {sale.description && <div className="card-desc">{sale.description}</div>}
+                        {sale.tags?.length > 0 && (
+                          <div className="card-tags">
+                            {sale.tags.slice(0,4).map(t=><span key={t} className="card-tag">{t}</span>)}
+                            {sale.tags.length>4&&<span style={{fontSize:11,color:"var(--text-muted)",alignSelf:"center"}}>+{sale.tags.length-4}</span>}
+                          </div>
+                        )}
+                        <div className="card-footer">
+                          <span className="card-source">🌐 {sale.source}</span>
+                          <span className="see-details">See details ›</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         )}
@@ -546,7 +733,7 @@ export default function App() {
                 </div>
                 <div className="info-row">
                   <div className="info-icon">📅</div>
-                  <div><div className="info-label">Dates</div><div className="info-value">{selectedSale.startDate} → {selectedSale.endDate}</div></div>
+                  <div><div className="info-label">Dates</div><div className="info-value">{selectedSale.startDate}{selectedSale.endDate!==selectedSale.startDate?` → ${selectedSale.endDate}`:""}</div></div>
                 </div>
                 <div className="info-row">
                   <div className="info-icon">🌐</div>
@@ -561,9 +748,9 @@ export default function App() {
                 </div>
               )}
 
-              {selectedSale.tags?.length>0 && (
+              {selectedSale.tags?.length > 0 && (
                 <div className="detail-section">
-                  <div className="detail-section-title">Featured Items</div>
+                  <div className="detail-section-title">Tags</div>
                   <div className="detail-tags">
                     {selectedSale.tags.map(t=><span key={t} className="detail-tag">📦 {t}</span>)}
                   </div>
@@ -637,10 +824,10 @@ export default function App() {
                       <button className="photo-remove" onClick={()=>{setPhotos(prev=>prev.filter((_,j)=>j!==i));setResult(null);}}>✕</button>
                     </div>
                   ))}
-                  {canAddMore && <div className="add-photo-cell" onClick={()=>fileRef.current.click()}><div className="add-photo-icon">+</div><div className="add-photo-label">Add photo</div></div>}
+                  {photos.length < MAX_PHOTOS && <div className="add-photo-cell" onClick={()=>fileRef.current.click()}><div className="add-photo-icon">+</div><div className="add-photo-label">Add photo</div></div>}
                 </div>
                 <div className="add-options-row">
-                  {canAddMore && <><button className="add-opt-btn" onClick={()=>cameraRef.current.click()}>📷 Camera</button><button className="add-opt-btn" onClick={()=>fileRef.current.click()}>🖼 Library</button></>}
+                  {photos.length < MAX_PHOTOS && <><button className="add-opt-btn" onClick={()=>cameraRef.current.click()}>📷 Camera</button><button className="add-opt-btn" onClick={()=>fileRef.current.click()}>🖼 Library</button></>}
                   <button className="add-opt-btn" onClick={()=>{setPhotos([]);setResult(null);}}>🗑 Clear</button>
                 </div>
                 <button className="analyze-btn" onClick={analyze} disabled={loading}>
@@ -674,8 +861,6 @@ export default function App() {
         {/* ── SAVED TAB ── */}
         {tab==="finds" && (
           <div className="finds-page">
-
-            {/* Sub-tabs: Items vs Sales */}
             <div className="filter-row" style={{marginBottom:16}}>
               <button className={`filter-chip ${findsTab==="items"?"active-all":""}`} onClick={()=>setFindsTab("items")}>
                 🏺 My Finds {savedFinds.length>0?`(${savedFinds.length})`:""}
@@ -685,7 +870,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* IDENTIFIED ITEMS */}
             {findsTab==="items" && (
               <>
                 <div className="folder-tabs">
@@ -714,7 +898,6 @@ export default function App() {
               </>
             )}
 
-            {/* SAVED SALES */}
             {findsTab==="sales" && (
               <>
                 {savedSales.length===0 ? (
@@ -729,7 +912,7 @@ export default function App() {
                     <div className="saved-sale-info">
                       <div className="saved-sale-title">{sale.title}</div>
                       <div className="saved-sale-city">📍 {sale.city}, {sale.state}</div>
-                      <div className="saved-sale-date">{sale.startDate} → {sale.endDate}</div>
+                      <div className="saved-sale-date">{sale.startDate}{sale.endDate!==sale.startDate?` → ${sale.endDate}`:""}</div>
                     </div>
                     <button className="unsave-btn" onClick={e=>{e.stopPropagation();toggleSaveSale(sale);}}>🗑</button>
                   </div>
