@@ -494,7 +494,7 @@ export default function App() {
     const matchFilter = filter==="all"||s.type===filter;
     const matchRadius = s.distance<=radius;
     const matchSearch = !search||
-      s.title.toLowerCase().includes(search.toLowerCase())||
+      s.name.toLowerCase().includes(search.toLowerCase())||
       s.city.toLowerCase().includes(search.toLowerCase())||
       s.tags?.some(t=>t.toLowerCase().includes(search.toLowerCase()));
     return matchFilter&&matchRadius&&matchSearch;
