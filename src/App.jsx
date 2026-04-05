@@ -486,12 +486,12 @@ export default function App() {
     );
   };
 
-  const typeLabel = (t) => t==="estate"?"Estate Sale":t==="garage"?"Garage Sale":"Thrift / Antique";
-  const typeIcon  = (t) => t==="estate"?"🏠":t==="garage"?"🏷️":"🛍️";
+  const typeLabel = (t) => t==="estate"?"Estate Sale":t==="auction"?"Auction":t==="garage"?"Garage Sale":"Thrift / Antique";
+  const typeIcon  = (t) => t==="estate"?"🏠":t==="auction"?"🔨":t==="garage"?"🏷️":"🛍️";
   const isToday   = (s) => s.startDate===today||(s.endDate>=today&&s.startDate<=today);
 
   const filteredSales = sales.filter(s => {
-    const matchFilter = filter==="all"||s.type===filter;
+    const matchFilter = filter==="all"||s.type===filter|| (filter==="estate"&&s.type==="auction");
     const matchRadius = s.distance<=radius;
     const matchSearch = !search||
       s.name.toLowerCase().includes(search.toLowerCase())||
