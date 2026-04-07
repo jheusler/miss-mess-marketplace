@@ -1,26 +1,59 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 const today = new Date().toISOString().split("T")[0];
-const d = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().split("T")[0]; };
+const d = (n) => {
+  const x = new Date();
+  x.setDate(x.getDate() + n);
+  return x.toISOString().split("T")[0];
+};
 
-const FOLDERS = ["My Finds","Furniture","Jewelry","Art & Decor","Vintage","Electronics"];
+const FOLDERS = [
+  "My Finds",
+  "Furniture",
+  "Jewelry",
+  "Art & Decor",
+  "Vintage",
+  "Electronics",
+];
 const MAX_PHOTOS = 4;
-const FILTERS = ["all","estate","garage","thrift"];
-const RADIUS_OPTIONS = [5,10,25,50];
+const FILTERS = ["all", "estate", "garage", "thrift"];
+const RADIUS_OPTIONS = [5, 10, 25, 50];
 const NEGOTIATION_TIPS = {
-  estate:["Arrive 30 min before opening for best selection","Ask about discounts on the last day (often 50% off)","Bundle multiple items for a better deal","Bring cash — many estate sales prefer it","Inspect items carefully; all sales are usually final"],
-  garage:["Early birds get best picks, late birds get best prices","Make a reasonable first offer (20–30% below asking)","Ask if prices are firm or negotiable upfront","Buy in bundles — offer one price for a group","Be friendly and conversational — it helps get deals"],
-  thrift:["Check color tag rotation for 50% off days","Visit on restock days (often Mon/Tue) for best selection","Look for hidden gems in electronics and housewares","Check inside pots/containers for items hiding inside","Senior discount days can be combined with sale days"],
+  estate: [
+    "Arrive 30 min before opening for best selection",
+    "Ask about discounts on the last day (often 50% off)",
+    "Bundle multiple items for a better deal",
+    "Bring cash — many estate sales prefer it",
+    "Inspect items carefully; all sales are usually final",
+  ],
+  garage: [
+    "Early birds get best picks, late birds get best prices",
+    "Make a reasonable first offer (20–30% below asking)",
+    "Ask if prices are firm or negotiable upfront",
+    "Buy in bundles — offer one price for a group",
+    "Be friendly and conversational — it helps get deals",
+  ],
+  thrift: [
+    "Check color tag rotation for 50% off days",
+    "Visit on restock days (often Mon/Tue) for best selection",
+    "Look for hidden gems in electronics and housewares",
+    "Check inside pots/containers for items hiding inside",
+    "Senior discount days can be combined with sale days",
+  ],
 };
 
 // ── Real data helpers ──────────────────────────────────────────────────────────
 
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 3958.8;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // Fetch real thrift stores & antique shops from OpenStreetMap Overpass API
@@ -45,21 +78,33 @@ async function fetchThriftAndAntiques(lat, lng, radiusMiles) {
   });
   const data = await res.json();
   return data.elements
-    .filter(el => el.tags?.name)
-    .map(el => {
+    .filter((el) => el.tags?.name)
+    .map((el) => {
       const elLat = el.lat ?? el.center?.lat;
       const elLon = el.lon ?? el.center?.lon;
       const t = el.tags || {};
       const shopType = t.shop || "thrift";
-      const typeLabel = shopType === "antiques" ? "Antique Shop" : shopType === "charity" ? "Charity Thrift" : "Second-Hand Store";
-      const typeDesc = shopType === "antiques" ? "Antique shop" : shopType === "charity" ? "Charity thrift shop" : "Second-hand store";
+      const typeLabel =
+        shopType === "antiques"
+          ? "Antique Shop"
+          : shopType === "charity"
+            ? "Charity Thrift"
+            : "Second-Hand Store";
+      const typeDesc =
+        shopType === "antiques"
+          ? "Antique shop"
+          : shopType === "charity"
+            ? "Charity thrift shop"
+            : "Second-hand store";
       const hours = t.opening_hours ? ` Hours: ${t.opening_hours}.` : "";
       const brand = t.brand || t.operator || "";
       return {
         id: `osm-${el.id}`,
         title: t.name,
         type: "thrift",
-        address: [t["addr:housenumber"], t["addr:street"]].filter(Boolean).join(" ") || "See map",
+        address:
+          [t["addr:housenumber"], t["addr:street"]].filter(Boolean).join(" ") ||
+          "See map",
         city: t["addr:city"] || "St. Louis",
         state: t["addr:state"] || "MO",
         zip: t["addr:postcode"] || "",
@@ -68,7 +113,10 @@ async function fetchThriftAndAntiques(lat, lng, radiusMiles) {
         endDate: d(365),
         description: `${typeDesc}${brand ? " — " + brand : ""}.${hours}`,
         source: "OpenStreetMap",
-        url: t.website || t["contact:website"] || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.name + " " + (t["addr:city"] || "St. Louis"))}`,
+        url:
+          t.website ||
+          t["contact:website"] ||
+          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.name + " " + (t["addr:city"] || "St. Louis"))}`,
         tags: [typeLabel, brand].filter(Boolean),
         featured: false,
         photos: [],
@@ -80,7 +128,7 @@ async function fetchThriftAndAntiques(lat, lng, radiusMiles) {
 function generateGatewaySales(lat, lng, cityLabel) {
   const city = cityLabel.replace(", MO", "").replace(", IL", "").trim();
   const clBase = "https://stlouis.craigslist.org/search/gss";
-  const esBase = `https://www.estatesales.net/MO/${encodeURIComponent(city.replace(/ /g,"-"))}`;
+  const esBase = `https://www.estatesales.net/MO/${encodeURIComponent(city.replace(/ /g, "-"))}`;
   const fbBase = `https://www.facebook.com/marketplace/stlouis/garage-sales`;
   return [
     {
@@ -97,7 +145,7 @@ function generateGatewaySales(lat, lng, cityLabel) {
       description: `Tap to browse this weekend's estate sales near you on EstateSales.net — the largest estate sale listing site in the US.`,
       source: "EstateSales.net",
       url: esBase,
-      tags: ["furniture","jewelry","collectibles","art","vintage"],
+      tags: ["furniture", "jewelry", "collectibles", "art", "vintage"],
       featured: true,
       photos: [],
     },
@@ -115,7 +163,7 @@ function generateGatewaySales(lat, lng, cityLabel) {
       description: `Tap to browse today's garage sales posted on Craigslist St. Louis — updated daily by locals.`,
       source: "Craigslist",
       url: clBase,
-      tags: ["tools","records","clothing","furniture","toys"],
+      tags: ["tools", "records", "clothing", "furniture", "toys"],
       featured: false,
       photos: [],
     },
@@ -133,7 +181,7 @@ function generateGatewaySales(lat, lng, cityLabel) {
       description: `Tap to browse garage sale listings near you on Facebook Marketplace.`,
       source: "Facebook Marketplace",
       url: fbBase,
-      tags: ["garage sale","moving sale","yard sale"],
+      tags: ["garage sale", "moving sale", "yard sale"],
       featured: false,
       photos: [],
     },
@@ -375,32 +423,55 @@ const css = `
   input[type="file"] { display:none; }
 `;
 
-const fileToBase64 = (file) => new Promise((res,rej) => {
-  const r = new FileReader();
-  r.onload = () => res(r.result);
-  r.onerror = rej;
-  r.readAsDataURL(file);
-});
+const fileToBase64 = (file) =>
+  new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
 
 function PhotoGallery({ photos }) {
   const [idx, setIdx] = useState(0);
   if (!photos?.length) return null;
-  const prev = () => setIdx(i => (i - 1 + photos.length) % photos.length);
-  const next = () => setIdx(i => (i + 1) % photos.length);
+  const prev = () => setIdx((i) => (i - 1 + photos.length) % photos.length);
+  const next = () => setIdx((i) => (i + 1) % photos.length);
   return (
     <div className="gallery">
-      <img className="gallery-img" src={photos[idx]} alt={`Photo ${idx+1}`} />
-      <div className="gallery-counter">{idx+1} / {photos.length}</div>
-      {photos.length > 1 && <>
-        <button className="gallery-prev" onClick={prev}>‹</button>
-        <button className="gallery-next" onClick={next}>›</button>
-        <div className="gallery-dots">
-          {photos.map((_,i) => <button key={i} className={`gallery-dot ${i===idx?"active":""}`} onClick={() => setIdx(i)} />)}
-        </div>
-      </>}
+      <img className="gallery-img" src={photos[idx]} alt={`Photo ${idx + 1}`} />
+      <div className="gallery-counter">
+        {idx + 1} / {photos.length}
+      </div>
+      {photos.length > 1 && (
+        <>
+          <button className="gallery-prev" onClick={prev}>
+            ‹
+          </button>
+          <button className="gallery-next" onClick={next}>
+            ›
+          </button>
+          <div className="gallery-dots">
+            {photos.map((_, i) => (
+              <button
+                key={i}
+                className={`gallery-dot ${i === idx ? "active" : ""}`}
+                onClick={() => setIdx(i)}
+              />
+            ))}
+          </div>
+        </>
+      )}
       {photos.length > 1 && (
         <div className="gallery-thumbs">
-          {photos.map((p,i) => <img key={i} className={`gallery-thumb ${i===idx?"active":""}`} src={p} alt="" onClick={() => setIdx(i)} />)}
+          {photos.map((p, i) => (
+            <img
+              key={i}
+              className={`gallery-thumb ${i === idx ? "active" : ""}`}
+              src={p}
+              alt=""
+              onClick={() => setIdx(i)}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -408,14 +479,21 @@ function PhotoGallery({ photos }) {
 }
 
 function loadFromStorage(key, fallback) {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 function saveToStorage(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
 }
 
 // St. Louis city center — used as fallback until real geolocation succeeds
-const STL_LAT = 38.6270;
+const STL_LAT = 38.627;
 const STL_LNG = -90.1994;
 
 export default function App() {
@@ -430,14 +508,22 @@ export default function App() {
   const [userLng, setUserLng] = useState(STL_LNG);
   const [sales, setSales] = useState([]);
   const [salesLoading, setSalesLoading] = useState(false);
-  const [salesSources, setSalesSources] = useState({ thrift: 0, garage: 0, estate: 0 });
+  const [salesSources, setSalesSources] = useState({
+    thrift: 0,
+    garage: 0,
+    estate: 0,
+  });
   const [selectedSale, setSelectedSale] = useState(null);
-  const [savedSales, setSavedSales] = useState(() => loadFromStorage("mmm_saved_sales", []));
+  const [savedSales, setSavedSales] = useState(() =>
+    loadFromStorage("mmm_saved_sales", []),
+  );
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [selectedFolder, setSelectedFolder] = useState("My Finds");
-  const [savedFinds, setSavedFinds] = useState(() => loadFromStorage("mmm_saved_finds", []));
+  const [savedFinds, setSavedFinds] = useState(() =>
+    loadFromStorage("mmm_saved_finds", []),
+  );
   const [savedThisItem, setSavedThisItem] = useState(false);
   const [toast, setToast] = useState(null);
   const [activeFolder, setActiveFolder] = useState("All");
@@ -447,11 +533,17 @@ export default function App() {
   const fileRef = useRef();
   const cameraRef = useRef();
 
-  useEffect(() => { saveToStorage("mmm_saved_sales", savedSales); }, [savedSales]);
-  useEffect(() => { saveToStorage("mmm_saved_finds", savedFinds); }, [savedFinds]);
+  useEffect(() => {
+    saveToStorage("mmm_saved_sales", savedSales);
+  }, [savedSales]);
+  useEffect(() => {
+    saveToStorage("mmm_saved_finds", savedFinds);
+  }, [savedFinds]);
 
   // Attempt real geolocation in background on first load — feed already visible with STL fallback
-  useEffect(() => { getLocationBackground(); }, []);
+  useEffect(() => {
+    getLocationBackground();
+  }, []);
 
   // Re-fetch listings whenever location or radius changes
   useEffect(() => {
@@ -459,23 +551,40 @@ export default function App() {
     setSalesLoading(true);
     setSales([]);
     Promise.all([
-      fetch("./sales.json").then(r => r.json()).catch(() => []),
-      fetchThriftAndAntiques(userLat, userLng, radius).catch(() => [])
-    ]).then(([estate, thrift]) => {
-      const withDist = estate.map(s => {
-        const dLat = (s.latitude - userLat) * Math.PI / 180;
-        const dLng = (s.longitude - userLng) * Math.PI / 180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(userLat*Math.PI/180)*Math.cos(s.latitude*Math.PI/180)*Math.sin(dLng/2)**2;
-        s.distance = 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return s;
-      });
-      const all = [...withDist, ...thrift].sort((a, b) => a.distance - b.distance);
-      setSales(all);
-      setSalesSources({ thrift: thrift.length, garage: 0, estate: withDist.length });
-    }).finally(() => setSalesLoading(false));
+      fetch("./sales.json")
+        .then((r) => r.json())
+        .catch(() => []),
+      fetchThriftAndAntiques(userLat, userLng, radius).catch(() => []),
+    ])
+      .then(([estate, thrift]) => {
+        const withDist = estate.map((s) => {
+          const dLat = ((s.latitude - userLat) * Math.PI) / 180;
+          const dLng = ((s.longitude - userLng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((userLat * Math.PI) / 180) *
+              Math.cos((s.latitude * Math.PI) / 180) *
+              Math.sin(dLng / 2) ** 2;
+          s.distance = 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          return s;
+        });
+        const all = [...withDist, ...thrift].sort(
+          (a, b) => a.distance - b.distance,
+        );
+        setSales(all);
+        setSalesSources({
+          thrift: thrift.length,
+          garage: 0,
+          estate: withDist.length,
+        });
+      })
+      .finally(() => setSalesLoading(false));
   }, [userLat, userLng, radius]);
 
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2600);
+  };
 
   // Background geolocation — updates location silently without blocking the feed
   const getLocationBackground = () => {
@@ -487,9 +596,15 @@ export default function App() {
         setUserLng(longitude);
         setLocationStatus("locating");
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+          );
           const data = await res.json();
-          const city = data.address?.city || data.address?.town || data.address?.village || "Your area";
+          const city =
+            data.address?.city ||
+            data.address?.town ||
+            data.address?.village ||
+            "Your area";
           const state = data.address?.state_code || "";
           setLocationLabel(`${city}${state ? ", " + state : ""}`);
         } catch {
@@ -501,13 +616,17 @@ export default function App() {
         // Geolocation failed — silently keep St. Louis fallback, no error shown
         setLocationStatus("located");
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
   };
 
   // Manual retry when user taps location bar
   const getLocation = () => {
-    if (!navigator.geolocation) { setLocationStatus("error"); setLocationLabel("Geolocation not supported"); return; }
+    if (!navigator.geolocation) {
+      setLocationStatus("error");
+      setLocationLabel("Geolocation not supported");
+      return;
+    }
     setLocationStatus("locating");
     setLocationLabel("Finding your location...");
     navigator.geolocation.getCurrentPosition(
@@ -516,88 +635,170 @@ export default function App() {
         setUserLat(latitude);
         setUserLng(longitude);
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+          );
           const data = await res.json();
-          const city = data.address?.city || data.address?.town || data.address?.village || "Your area";
+          const city =
+            data.address?.city ||
+            data.address?.town ||
+            data.address?.village ||
+            "Your area";
           const state = data.address?.state_code || "";
           setLocationLabel(`${city}${state ? ", " + state : ""}`);
-        } catch { setLocationLabel(`${latitude.toFixed(3)}, ${longitude.toFixed(3)}`); }
+        } catch {
+          setLocationLabel(`${latitude.toFixed(3)}, ${longitude.toFixed(3)}`);
+        }
         setLocationStatus("located");
       },
       () => {
         setLocationStatus("error");
         setLocationLabel("Location unavailable — tap to retry");
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
   };
 
-  const typeLabel = (t) => t==="estate"?"Estate Sale":t==="auction"?"Auction":t==="garage"?"Garage Sale":"Thrift / Antique";
-  const typeIcon  = (t) => t==="estate"?"🏠":t==="auction"?"🔨":t==="garage"?"🏷️":"🛍️";
-  const isToday   = (s) => s.startDate===today||(s.endDate>=today&&s.startDate<=today);
+  const typeLabel = (t) =>
+    t === "estate"
+      ? "Estate Sale"
+      : t === "auction"
+        ? "Auction"
+        : t === "garage"
+          ? "Garage Sale"
+          : "Thrift / Antique";
+  const typeIcon = (t) =>
+    t === "estate"
+      ? "🏠"
+      : t === "auction"
+        ? "🔨"
+        : t === "garage"
+          ? "🏷️"
+          : "🛍️";
+  const isToday = (s) =>
+    s.startDate === today || (s.endDate >= today && s.startDate <= today);
 
-  const filteredSales = sales.filter(s => {
-    const matchFilter = filter==="all"||s.type===filter||(filter==="estate"&&s.type==="auction");
-    const matchRadius = s.distance<=radius;
-    const matchSearch = !search||
-      s.name?.toLowerCase().includes(search.toLowerCase())||
-      s.city?.toLowerCase().includes(search.toLowerCase())||
-      s.tags?.some(t=>t.toLowerCase().includes(search.toLowerCase()));
-    return matchFilter&&matchRadius&&matchSearch;
+  const filteredSales = sales.filter((s) => {
+    const matchFilter =
+      filter === "all" ||
+      s.type === filter ||
+      (filter === "estate" && s.type === "auction");
+    const matchRadius = s.distance <= radius;
+    const matchSearch =
+      !search ||
+      s.name?.toLowerCase().includes(search.toLowerCase()) ||
+      s.city?.toLowerCase().includes(search.toLowerCase()) ||
+      s.tags?.some((t) => t.toLowerCase().includes(search.toLowerCase()));
+    return matchFilter && matchRadius && matchSearch;
   });
 
-  const isSaleSaved = (id) => savedSales.some(s => s.id===id);
+  const isSaleSaved = (id) => savedSales.some((s) => s.id === id);
   const toggleSaveSale = (sale) => {
     if (isSaleSaved(sale.id)) {
-      setSavedSales(prev => prev.filter(s => s.id!==sale.id));
+      setSavedSales((prev) => prev.filter((s) => s.id !== sale.id));
       showToast("Removed from saved sales");
     } else {
-      setSavedSales(prev => [sale, ...prev]);
+      setSavedSales((prev) => [sale, ...prev]);
       showToast("Sale saved! ❤️");
     }
   };
 
   const addFiles = async (files) => {
-    const arr = Array.from(files).filter(f => f.type.startsWith("image/"));
-    const converted = await Promise.all(arr.map(async f => ({ dataUrl: await fileToBase64(f), mimeType: f.type })));
-    setPhotos(prev => { const slots = MAX_PHOTOS-prev.length; return [...prev,...converted.slice(0,slots)]; });
-    setResult(null); setSavedThisItem(false);
+    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const converted = await Promise.all(
+      arr.map(async (f) => ({
+        dataUrl: await fileToBase64(f),
+        mimeType: f.type,
+      })),
+    );
+    setPhotos((prev) => {
+      const slots = MAX_PHOTOS - prev.length;
+      return [...prev, ...converted.slice(0, slots)];
+    });
+    setResult(null);
+    setSavedThisItem(false);
   };
 
-  const handleDrop = useCallback((e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }, []);
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    setDragOver(false);
+    addFiles(e.dataTransfer.files);
+  }, []);
 
   const analyze = async () => {
     if (!photos.length) return;
-    setLoading(true); setResult(null);
+    setLoading(true);
+    setResult(null);
     try {
-      const imageBlocks = photos.map(p => ({ type:"image", source:{ type:"base64", media_type:p.mimeType, data:p.dataUrl.split(",")[1] } }));
+      const imageBlocks = photos.map((p) => ({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: p.mimeType,
+          data: p.dataUrl.split(",")[1],
+        },
+      }));
       const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json", "x-api-key": window.__ANTHROPIC_KEY__ || "", "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": window.__ANTHROPIC_KEY__ || "",
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
         body: JSON.stringify({
-          model:"claude-sonnet-4-20250514", max_tokens:1000,
-          messages:[{ role:"user", content:[...imageBlocks,{ type:"text", text:`You are an expert antiques appraiser and resale specialist. Analyze this item using eBay sold listings as your primary pricing reference. Respond ONLY with valid JSON, no markdown:\n{"name":"specific item name","era":"decade or Modern","originalPrice":"$XX–$XX","buyPrice":"$XX–$XX","resellPrice":"$XX–$XX (eBay comps)","facts":"2-3 sentences on history, value, and what to look for."}` }] }]
-        })
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [
+            {
+              role: "user",
+              content: [
+                ...imageBlocks,
+                {
+                  type: "text",
+                  text: `You are an expert antiques appraiser and resale specialist. Analyze this item using eBay sold listings as your primary pricing reference. Respond ONLY with valid JSON, no markdown:\n{"name":"specific item name","era":"decade or Modern","originalPrice":"$XX–$XX","buyPrice":"$XX–$XX","resellPrice":"$XX–$XX (eBay comps)","facts":"2-3 sentences on history, value, and what to look for."}`,
+                },
+              ],
+            },
+          ],
+        }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error.message);
-      const text = data.content?.find(b=>b.type==="text")?.text||"";
-      setResult(JSON.parse(text.replace(/```json|```/g,"").trim()));
+      const text = data.content?.find((b) => b.type === "text")?.text || "";
+      setResult(JSON.parse(text.replace(/```json|```/g, "").trim()));
     } catch (err) {
-      setResult({ error: err.message?.includes("401") ? "API key needed — add your Anthropic key to get item values." : "Couldn't analyze this image. Try again with a clearer photo." });
+      setResult({
+        error: err.message?.includes("401")
+          ? "API key needed — add your Anthropic key to get item values."
+          : "Couldn't analyze this image. Try again with a clearer photo.",
+      });
     }
     setLoading(false);
   };
 
   const saveFind = () => {
-    if (!result||savedThisItem) return;
-    setSavedFinds(prev => [{ id:Date.now(), name:result.name, era:result.era, resellPrice:result.resellPrice, folder:selectedFolder, imageUrl:photos[0]?.dataUrl }, ...prev]);
+    if (!result || savedThisItem) return;
+    setSavedFinds((prev) => [
+      {
+        id: Date.now(),
+        name: result.name,
+        era: result.era,
+        resellPrice: result.resellPrice,
+        folder: selectedFolder,
+        imageUrl: photos[0]?.dataUrl,
+      },
+      ...prev,
+    ]);
     setSavedThisItem(true);
     showToast(`Saved to "${selectedFolder}" ✓`);
   };
 
-  const folderOptions = ["All",...FOLDERS];
-  const filteredFinds = activeFolder==="All" ? savedFinds : savedFinds.filter(f=>f.folder===activeFolder);
+  const folderOptions = ["All", ...FOLDERS];
+  const filteredFinds =
+    activeFolder === "All"
+      ? savedFinds
+      : savedFinds.filter((f) => f.folder === activeFolder);
 
   return (
     <>
@@ -605,46 +806,123 @@ export default function App() {
       <div className="app">
         <div className="header">
           <div className="header-inner">
-            <div className="logo">Miss <em>Mess</em> Marketplace</div>
+            <div className="logo">
+              Miss <em>Mess</em> Marketplace
+            </div>
             <div className="tagline">Treasure hunting, reimagined</div>
           </div>
         </div>
 
         <div className="tabs">
-          <button className={`tab ${tab==="sales"?"active":""}`} onClick={() => { setTab("sales"); setSelectedSale(null); }}>🏷 Sales</button>
-          <button className={`tab ${tab==="scan"?"active":""}`} onClick={() => setTab("scan")}>📷 Identify</button>
-          <button className={`tab ${tab==="finds"?"active":""}`} onClick={() => setTab("finds")}>
-            🗂 Saved {(savedFinds.length+savedSales.length)>0?`(${savedFinds.length+savedSales.length})`:""}
+          <button
+            className={`tab ${tab === "sales" ? "active" : ""}`}
+            onClick={() => {
+              setTab("sales");
+              setSelectedSale(null);
+            }}
+          >
+            🏷 Sales
+          </button>
+          <button
+            className={`tab ${tab === "scan" ? "active" : ""}`}
+            onClick={() => setTab("scan")}
+          >
+            📷 Identify
+          </button>
+          <button
+            className={`tab ${tab === "finds" ? "active" : ""}`}
+            onClick={() => setTab("finds")}
+          >
+            🗂 Saved{" "}
+            {savedFinds.length + savedSales.length > 0
+              ? `(${savedFinds.length + savedSales.length})`
+              : ""}
           </button>
         </div>
 
-        <input type="file" ref={fileRef} accept="image/*" multiple onChange={e=>addFiles(e.target.files)} />
-        <input type="file" ref={cameraRef} accept="image/*" capture="environment" onChange={e=>addFiles(e.target.files)} />
+        <input
+          type="file"
+          ref={fileRef}
+          accept="image/*"
+          multiple
+          onChange={(e) => addFiles(e.target.files)}
+        />
+        <input
+          type="file"
+          ref={cameraRef}
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => addFiles(e.target.files)}
+        />
 
         {/* ── SALES FEED ── */}
-        {tab==="sales" && !selectedSale && (
+        {tab === "sales" && !selectedSale && (
           <div className="feed-page">
             <div className="feed-header">
               <div className="location-bar" onClick={getLocation}>
-                <span style={{fontSize:16}}>📍</span>
+                <span style={{ fontSize: 16 }}>📍</span>
                 <span className="location-bar-text">{locationLabel}</span>
                 <span className={`location-status ${locationStatus}`}>
-                  {locationStatus==="locating"?"⏳ Locating...":locationStatus==="located"?"✓ Located":locationStatus==="idle"?"Tap to locate":"Retry"}
+                  {locationStatus === "locating"
+                    ? "⏳ Locating..."
+                    : locationStatus === "located"
+                      ? "✓ Located"
+                      : locationStatus === "idle"
+                        ? "Tap to locate"
+                        : "Retry"}
                 </span>
               </div>
               <div className="radius-row">
                 <span className="radius-label">Within</span>
-                {RADIUS_OPTIONS.map(r => <button key={r} className={`radius-chip ${radius===r?"active":""}`} onClick={() => setRadius(r)}>{r} mi</button>)}
+                {RADIUS_OPTIONS.map((r) => (
+                  <button
+                    key={r}
+                    className={`radius-chip ${radius === r ? "active" : ""}`}
+                    onClick={() => setRadius(r)}
+                  >
+                    {r} mi
+                  </button>
+                ))}
               </div>
               <div className="search-bar">
-                <span style={{fontSize:15,color:"var(--text-muted)"}}>🔍</span>
-                <input className="search-input" placeholder="City, zip, or keyword..." value={search} onChange={e=>setSearch(e.target.value)} />
-                {search && <button style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:16}} onClick={() => setSearch("")}>✕</button>}
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>
+                  🔍
+                </span>
+                <input
+                  className="search-input"
+                  placeholder="City, zip, or keyword..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                {search && (
+                  <button
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--text-muted)",
+                      fontSize: 16,
+                    }}
+                    onClick={() => setSearch("")}
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
               <div className="filter-row">
-                {FILTERS.map(f => (
-                  <button key={f} className={`filter-chip ${filter===f?`active-${f}`:""}`} onClick={() => setFilter(f)}>
-                    {f==="all"?"All Sales":f==="estate"?"🏠 Estate":f==="garage"?"🏷 Garage":"🛍 Thrift"}
+                {FILTERS.map((f) => (
+                  <button
+                    key={f}
+                    className={`filter-chip ${filter === f ? `active-${f}` : ""}`}
+                    onClick={() => setFilter(f)}
+                  >
+                    {f === "all"
+                      ? "All Sales"
+                      : f === "estate"
+                        ? "🏠 Estate"
+                        : f === "garage"
+                          ? "🏷 Garage"
+                          : "🛍 Thrift"}
                   </button>
                 ))}
               </div>
@@ -654,56 +932,131 @@ export default function App() {
               {salesLoading ? (
                 <div className="feed-loading">
                   <div className="feed-spinner" />
-                  <div className="feed-loading-text">Finding sales near you…</div>
-                  <div className="feed-loading-sub">Checking EstateSales.net & local shops</div>
+                  <div className="feed-loading-text">
+                    Finding sales near you…
+                  </div>
+                  <div className="feed-loading-sub">
+                    Checking EstateSales.net & local shops
+                  </div>
                 </div>
               ) : filteredSales.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">🔍</div>
                   <div className="empty-title">No sales found nearby</div>
-                  <div className="empty-sub">Try expanding your radius or a different filter.</div>
+                  <div className="empty-sub">
+                    Try expanding your radius or a different filter.
+                  </div>
                 </div>
               ) : (
                 <>
                   <div className="source-banner">
                     <span>📡</span>
                     <span className="source-banner-text">
-                      Live: {salesSources.estate > 0 ? `${salesSources.estate} estate sale${salesSources.estate!==1?"s":""}, ` : ""}
-                      {salesSources.thrift > 0 ? `${salesSources.thrift} thrift/antique store${salesSources.thrift!==1?"s":""} ` : ""}
+                      Live:{" "}
+                      {salesSources.estate > 0
+                        ? `${salesSources.estate} estate sale${salesSources.estate !== 1 ? "s" : ""}, `
+                        : ""}
+                      {salesSources.thrift > 0
+                        ? `${salesSources.thrift} thrift/antique store${salesSources.thrift !== 1 ? "s" : ""} `
+                        : ""}
                       near {locationLabel}
                     </span>
-                    <button className="source-banner-link" onClick={() => window.open("https://www.estatesales.net/MO/St-Louis","_blank")}>+ More</button>
+                    <button
+                      className="source-banner-link"
+                      onClick={() =>
+                        window.open(
+                          "https://www.estatesales.net/MO/St-Louis",
+                          "_blank",
+                        )
+                      }
+                    >
+                      + More
+                    </button>
                   </div>
 
-                  {filteredSales.map(sale => (
-                    <div key={sale.id} className="sale-card" onClick={() => setSelectedSale(sale)}>
-                      {sale.photos?.[0]
-                        ? <img className="sale-hero" src={sale.photos[0]} alt={sale.title} onError={e=>{e.target.style.display="none";}} />
-                        : <div className="sale-hero-placeholder">{typeIcon(sale.type)}</div>
-                      }
-                      {sale.featured && <div className="featured-badge">⭐ FEATURED</div>}
-                      {sale.photos?.length > 1 && <div className="photo-count-badge">📷 {sale.photos.length}</div>}
+                  {filteredSales.map((sale) => (
+                    <div
+                      key={sale.id}
+                      className="sale-card"
+                      onClick={() => setSelectedSale(sale)}
+                    >
+                      {sale.photos?.[0] ? (
+                        <img
+                          className="sale-hero"
+                          src={sale.photos[0]}
+                          alt={sale.title}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="sale-hero-placeholder">
+                          {typeIcon(sale.type)}
+                        </div>
+                      )}
+                      {sale.featured && (
+                        <div className="featured-badge">⭐ FEATURED</div>
+                      )}
+                      {sale.photos?.length > 1 && (
+                        <div className="photo-count-badge">
+                          📷 {sale.photos.length}
+                        </div>
+                      )}
                       <div className="sale-card-body">
                         <div className="card-header">
-                          <div className={`type-badge ${sale.type}`}>{typeIcon(sale.type)} {typeLabel(sale.type)}</div>
+                          <div className={`type-badge ${sale.type}`}>
+                            {typeIcon(sale.type)} {typeLabel(sale.type)}
+                          </div>
                           <div className="card-right">
-                            <div className={`date-badge ${isToday(sale)?"today":""}`}>{isToday(sale)?"TODAY":sale.startDate}</div>
-                            <button className="heart-btn" onClick={e=>{e.stopPropagation();toggleSaveSale(sale);}}>
-                              {isSaleSaved(sale.id)?"❤️":"🤍"}
+                            <div
+                              className={`date-badge ${isToday(sale) ? "today" : ""}`}
+                            >
+                              {isToday(sale) ? "TODAY" : sale.startDate}
+                            </div>
+                            <button
+                              className="heart-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSaveSale(sale);
+                              }}
+                            >
+                              {isSaleSaved(sale.id) ? "❤️" : "🤍"}
                             </button>
                           </div>
                         </div>
-                        <div className="card-title">{sale.name || sale.title}</div>
-                        <div className="card-loc">
-                          <span style={{fontSize:13}}>📍</span>
-                          <span className="card-loc-text">{sale.address}, {sale.city}</span>
-                          <span className="dist-pill">{sale.distance.toFixed(1)} mi</span>
+                        <div className="card-title">
+                          {sale.name || sale.title}
                         </div>
-                        {sale.description && <div className="card-desc">{sale.description}</div>}
+                        <div className="card-loc">
+                          <span style={{ fontSize: 13 }}>📍</span>
+                          <span className="card-loc-text">
+                            {sale.address}, {sale.city}
+                          </span>
+                          <span className="dist-pill">
+                            {sale.distance.toFixed(1)} mi
+                          </span>
+                        </div>
+                        {sale.description && (
+                          <div className="card-desc">{sale.description}</div>
+                        )}
                         {sale.tags?.length > 0 && (
                           <div className="card-tags">
-                            {sale.tags.slice(0,4).map(t=><span key={t} className="card-tag">{t}</span>)}
-                            {sale.tags.length>4&&<span style={{fontSize:11,color:"var(--text-muted)",alignSelf:"center"}}>+{sale.tags.length-4}</span>}
+                            {sale.tags.slice(0, 4).map((t) => (
+                              <span key={t} className="card-tag">
+                                {t}
+                              </span>
+                            ))}
+                            {sale.tags.length > 4 && (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: "var(--text-muted)",
+                                  alignSelf: "center",
+                                }}
+                              >
+                                +{sale.tags.length - 4}
+                              </span>
+                            )}
                           </div>
                         )}
                         <div className="card-footer">
@@ -720,13 +1073,23 @@ export default function App() {
         )}
 
         {/* ── SALE DETAIL ── */}
-        {tab==="sales" && selectedSale && (
+        {tab === "sales" && selectedSale && (
           <div className="detail-page">
             <div className="detail-nav">
-              <button className="back-btn" onClick={() => setSelectedSale(null)}>‹</button>
-              <span className="detail-nav-title">{selectedSale.name || selectedSale.title}</span>
-              <button className="detail-heart" onClick={() => toggleSaveSale(selectedSale)}>
-                {isSaleSaved(selectedSale.id)?"❤️":"🤍"}
+              <button
+                className="back-btn"
+                onClick={() => setSelectedSale(null)}
+              >
+                ‹
+              </button>
+              <span className="detail-nav-title">
+                {selectedSale.name || selectedSale.title}
+              </span>
+              <button
+                className="detail-heart"
+                onClick={() => toggleSaveSale(selectedSale)}
+              >
+                {isSaleSaved(selectedSale.id) ? "❤️" : "🤍"}
               </button>
             </div>
 
@@ -734,23 +1097,46 @@ export default function App() {
 
             <div className="detail-content">
               <div className="detail-type-row">
-                <div className={`type-badge ${selectedSale.type}`}>{typeIcon(selectedSale.type)} {typeLabel(selectedSale.type)}</div>
-                <span className="dist-pill">📍 {selectedSale.distance.toFixed(1)} miles away</span>
+                <div className={`type-badge ${selectedSale.type}`}>
+                  {typeIcon(selectedSale.type)} {typeLabel(selectedSale.type)}
+                </div>
+                <span className="dist-pill">
+                  📍 {selectedSale.distance.toFixed(1)} miles away
+                </span>
               </div>
-              <div className="detail-title">{selectedSale.name || selectedSale.title}</div>
+              <div className="detail-title">
+                {selectedSale.name || selectedSale.title}
+              </div>
 
               <div className="info-card">
                 <div className="info-row">
                   <div className="info-icon">📍</div>
-                  <div><div className="info-label">Address</div><div className="info-value">{selectedSale.address}, {selectedSale.city}, {selectedSale.state} {selectedSale.zip}</div></div>
+                  <div>
+                    <div className="info-label">Address</div>
+                    <div className="info-value">
+                      {selectedSale.address}, {selectedSale.city},{" "}
+                      {selectedSale.state} {selectedSale.zip}
+                    </div>
+                  </div>
                 </div>
                 <div className="info-row">
                   <div className="info-icon">📅</div>
-                  <div><div className="info-label">Dates</div><div className="info-value">{selectedSale.startDate}{selectedSale.endDate!==selectedSale.startDate?` → ${selectedSale.endDate}`:""}</div></div>
+                  <div>
+                    <div className="info-label">Dates</div>
+                    <div className="info-value">
+                      {selectedSale.startDate}
+                      {selectedSale.endDate !== selectedSale.startDate
+                        ? ` → ${selectedSale.endDate}`
+                        : ""}
+                    </div>
+                  </div>
                 </div>
                 <div className="info-row">
                   <div className="info-icon">🌐</div>
-                  <div><div className="info-label">Source</div><div className="info-value">{selectedSale.source}</div></div>
+                  <div>
+                    <div className="info-label">Source</div>
+                    <div className="info-value">{selectedSale.source}</div>
+                  </div>
                 </div>
               </div>
 
@@ -765,33 +1151,61 @@ export default function App() {
                 <div className="detail-section">
                   <div className="detail-section-title">Tags</div>
                   <div className="detail-tags">
-                    {selectedSale.tags.map(t=><span key={t} className="detail-tag">📦 {t}</span>)}
+                    {selectedSale.tags.map((t) => (
+                      <span key={t} className="detail-tag">
+                        📦 {t}
+                      </span>
+                    ))}
                   </div>
                 </div>
               )}
 
               <div className="detail-section">
                 <div className="detail-section-title">⚡ Negotiation Tips</div>
-                {(NEGOTIATION_TIPS[selectedSale.type] || NEGOTIATION_TIPS.estate).map((tip,i) => (
+                {(
+                  NEGOTIATION_TIPS[selectedSale.type] || NEGOTIATION_TIPS.estate
+                ).map((tip, i) => (
                   <div key={i} className="tip-row">
-                    <div className="tip-bullet">{i+1}</div>
+                    <div className="tip-bullet">{i + 1}</div>
                     <div className="tip-text">{tip}</div>
                   </div>
                 ))}
               </div>
 
               <div className="detail-actions">
-                <button className={`save-sale-btn ${isSaleSaved(selectedSale.id)?"saved":"unsaved"}`} onClick={() => toggleSaveSale(selectedSale)}>
-                  {isSaleSaved(selectedSale.id)?"❤️ Saved to My Sales":"🤍 Save This Sale"}
+                <button
+                  className={`save-sale-btn ${isSaleSaved(selectedSale.id) ? "saved" : "unsaved"}`}
+                  onClick={() => toggleSaveSale(selectedSale)}
+                >
+                  {isSaleSaved(selectedSale.id)
+                    ? "❤️ Saved to My Sales"
+                    : "🤍 Save This Sale"}
                 </button>
-                <button className="primary-btn" onClick={() => window.open(selectedSale.url,"_blank")}>
+                <button
+                  className="primary-btn"
+                  onClick={() => window.open(selectedSale.url, "_blank")}
+                >
                   🔗 View on {selectedSale.source}
                 </button>
                 <div className="maps-row">
-                  <button className="map-btn" onClick={() => window.open(`https://maps.apple.com/?daddr=${encodeURIComponent(selectedSale.address+", "+selectedSale.city+", "+selectedSale.state)}`)}>
+                  <button
+                    className="map-btn"
+                    onClick={() =>
+                      window.open(
+                        `https://maps.apple.com/?daddr=${encodeURIComponent(selectedSale.address + ", " + selectedSale.city + ", " + selectedSale.state)}`,
+                      )
+                    }
+                  >
                     🗺 Apple Maps
                   </button>
-                  <button className="map-btn" onClick={() => window.open(`https://waze.com/ul?q=${encodeURIComponent(selectedSale.address+", "+selectedSale.city+", "+selectedSale.state)}`)}>
+                  <button
+                    className="map-btn"
+                    onClick={() =>
+                      window.open(
+                        `https://waze.com/ul?q=${encodeURIComponent(selectedSale.address + ", " + selectedSale.city + ", " + selectedSale.state)}`,
+                      )
+                    }
+                  >
                     🧭 Waze
                   </button>
                 </div>
@@ -802,10 +1216,19 @@ export default function App() {
                   <div className="ai-avatar">🤖</div>
                   <div>
                     <div className="ai-card-title">Research with AI</div>
-                    <div className="ai-card-sub">Snap a photo of an item at this sale — get values, eBay comps, and negotiation advice</div>
+                    <div className="ai-card-sub">
+                      Snap a photo of an item at this sale — get values, eBay
+                      comps, and negotiation advice
+                    </div>
                   </div>
                 </div>
-                <button className="ai-card-btn" onClick={() => { setSelectedSale(null); setTab("scan"); }}>
+                <button
+                  className="ai-card-btn"
+                  onClick={() => {
+                    setSelectedSale(null);
+                    setTab("scan");
+                  }}
+                >
                   <span className="ai-card-btn-text">Open AI Identifier</span>
                   <span>›</span>
                 </button>
@@ -815,93 +1238,226 @@ export default function App() {
         )}
 
         {/* ── SCAN TAB ── */}
-        {tab==="scan" && (
+        {tab === "scan" && (
           <div className="scan-page">
-            {photos.length===0 ? (
-              <div className={`upload-zone ${dragOver?"drag-over":""}`} onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} onDrop={handleDrop}>
+            {photos.length === 0 ? (
+              <div
+                className={`upload-zone ${dragOver ? "drag-over" : ""}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+              >
                 <div className="camera-icon">📸</div>
                 <div className="upload-title">Find something interesting?</div>
-                <div className="upload-sub">Add up to 4 photos — different angles help AI identify it better</div>
+                <div className="upload-sub">
+                  Add up to 4 photos — different angles help AI identify it
+                  better
+                </div>
                 <div className="btn-row">
-                  <button className="upload-btn" onClick={()=>cameraRef.current.click()}>📷 Camera</button>
-                  <button className="upload-btn-outline" onClick={()=>fileRef.current.click()}>🖼 Library</button>
+                  <button
+                    className="upload-btn"
+                    onClick={() => cameraRef.current.click()}
+                  >
+                    📷 Camera
+                  </button>
+                  <button
+                    className="upload-btn-outline"
+                    onClick={() => fileRef.current.click()}
+                  >
+                    🖼 Library
+                  </button>
                 </div>
               </div>
             ) : (
               <>
-                <div className="photo-count">{photos.length} of {MAX_PHOTOS} photos</div>
+                <div className="photo-count">
+                  {photos.length} of {MAX_PHOTOS} photos
+                </div>
                 <div className="photo-grid">
-                  {photos.map((p,i) => (
+                  {photos.map((p, i) => (
                     <div key={i} className="photo-cell">
-                      <img src={p.dataUrl} alt={`Photo ${i+1}`} />
-                      <button className="photo-remove" onClick={()=>{setPhotos(prev=>prev.filter((_,j)=>j!==i));setResult(null);}}>✕</button>
+                      <img src={p.dataUrl} alt={`Photo ${i + 1}`} />
+                      <button
+                        className="photo-remove"
+                        onClick={() => {
+                          setPhotos((prev) => prev.filter((_, j) => j !== i));
+                          setResult(null);
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
                   ))}
-                  {photos.length < MAX_PHOTOS && <div className="add-photo-cell" onClick={()=>fileRef.current.click()}><div className="add-photo-icon">+</div><div className="add-photo-label">Add photo</div></div>}
+                  {photos.length < MAX_PHOTOS && (
+                    <div
+                      className="add-photo-cell"
+                      onClick={() => fileRef.current.click()}
+                    >
+                      <div className="add-photo-icon">+</div>
+                      <div className="add-photo-label">Add photo</div>
+                    </div>
+                  )}
                 </div>
                 <div className="add-options-row">
-                  {photos.length < MAX_PHOTOS && <><button className="add-opt-btn" onClick={()=>cameraRef.current.click()}>📷 Camera</button><button className="add-opt-btn" onClick={()=>fileRef.current.click()}>🖼 Library</button></>}
-                  <button className="add-opt-btn" onClick={()=>{setPhotos([]);setResult(null);}}>🗑 Clear</button>
+                  {photos.length < MAX_PHOTOS && (
+                    <>
+                      <button
+                        className="add-opt-btn"
+                        onClick={() => cameraRef.current.click()}
+                      >
+                        📷 Camera
+                      </button>
+                      <button
+                        className="add-opt-btn"
+                        onClick={() => fileRef.current.click()}
+                      >
+                        🖼 Library
+                      </button>
+                    </>
+                  )}
+                  <button
+                    className="add-opt-btn"
+                    onClick={() => {
+                      setPhotos([]);
+                      setResult(null);
+                    }}
+                  >
+                    🗑 Clear
+                  </button>
                 </div>
-                <button className="analyze-btn" onClick={analyze} disabled={loading}>
-                  {loading?<><span className="loading-spinner"/>Analyzing {photos.length} photo{photos.length>1?"s":""}...</>:"✦ Identify This Item"}
+                <button
+                  className="analyze-btn"
+                  onClick={analyze}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="loading-spinner" />
+                      Analyzing {photos.length} photo
+                      {photos.length > 1 ? "s" : ""}...
+                    </>
+                  ) : (
+                    "✦ Identify This Item"
+                  )}
                 </button>
               </>
             )}
 
-            {result&&!result.error&&(
+            {result && !result.error && (
               <div className="result-card">
                 <div className="result-name">{result.name}</div>
                 <div className="result-era">{result.era}</div>
                 <div className="price-row">
-                  <div className="price-box"><div className="price-label">Original</div><div className="price-value price-original">{result.originalPrice}</div></div>
-                  <div className="price-box"><div className="price-label">Buy For</div><div className="price-value price-buy">{result.buyPrice}</div></div>
-                  <div className="price-box"><div className="price-label">Resell</div><div className="price-value price-resell">{result.resellPrice}</div></div>
+                  <div className="price-box">
+                    <div className="price-label">Original</div>
+                    <div className="price-value price-original">
+                      {result.originalPrice}
+                    </div>
+                  </div>
+                  <div className="price-box">
+                    <div className="price-label">Buy For</div>
+                    <div className="price-value price-buy">
+                      {result.buyPrice}
+                    </div>
+                  </div>
+                  <div className="price-box">
+                    <div className="price-label">Resell</div>
+                    <div className="price-value price-resell">
+                      {result.resellPrice}
+                    </div>
+                  </div>
                 </div>
                 <div className="result-facts">{result.facts}</div>
                 <div className="save-section">
-                  <select className="folder-select" value={selectedFolder} onChange={e=>setSelectedFolder(e.target.value)}>
-                    {FOLDERS.map(f=><option key={f}>{f}</option>)}
+                  <select
+                    className="folder-select"
+                    value={selectedFolder}
+                    onChange={(e) => setSelectedFolder(e.target.value)}
+                  >
+                    {FOLDERS.map((f) => (
+                      <option key={f}>{f}</option>
+                    ))}
                   </select>
-                  <button className={`save-btn ${savedThisItem?"saved":""}`} onClick={saveFind}>{savedThisItem?"✓ Saved!":"Save Find"}</button>
+                  <button
+                    className={`save-btn ${savedThisItem ? "saved" : ""}`}
+                    onClick={saveFind}
+                  >
+                    {savedThisItem ? "✓ Saved!" : "Save Find"}
+                  </button>
                 </div>
               </div>
             )}
-            {result?.error&&<div className="result-card" style={{textAlign:"center",color:"var(--text-muted)"}}>{result.error}</div>}
+            {result?.error && (
+              <div
+                className="result-card"
+                style={{ textAlign: "center", color: "var(--text-muted)" }}
+              >
+                {result.error}
+              </div>
+            )}
           </div>
         )}
 
         {/* ── SAVED TAB ── */}
-        {tab==="finds" && (
+        {tab === "finds" && (
           <div className="finds-page">
-            <div className="filter-row" style={{marginBottom:16}}>
-              <button className={`filter-chip ${findsTab==="items"?"active-all":""}`} onClick={()=>setFindsTab("items")}>
-                🏺 My Finds {savedFinds.length>0?`(${savedFinds.length})`:""}
+            <div className="filter-row" style={{ marginBottom: 16 }}>
+              <button
+                className={`filter-chip ${findsTab === "items" ? "active-all" : ""}`}
+                onClick={() => setFindsTab("items")}
+              >
+                🏺 My Finds{" "}
+                {savedFinds.length > 0 ? `(${savedFinds.length})` : ""}
               </button>
-              <button className={`filter-chip ${findsTab==="sales"?"active-all":""}`} onClick={()=>setFindsTab("sales")}>
-                ❤️ Saved Sales {savedSales.length>0?`(${savedSales.length})`:""}
+              <button
+                className={`filter-chip ${findsTab === "sales" ? "active-all" : ""}`}
+                onClick={() => setFindsTab("sales")}
+              >
+                ❤️ Saved Sales{" "}
+                {savedSales.length > 0 ? `(${savedSales.length})` : ""}
               </button>
             </div>
 
-            {findsTab==="items" && (
+            {findsTab === "items" && (
               <>
                 <div className="folder-tabs">
-                  {folderOptions.map(f=><button key={f} className={`folder-chip ${activeFolder===f?"active":""}`} onClick={()=>setActiveFolder(f)}>{f}</button>)}
+                  {folderOptions.map((f) => (
+                    <button
+                      key={f}
+                      className={`folder-chip ${activeFolder === f ? "active" : ""}`}
+                      onClick={() => setActiveFolder(f)}
+                    >
+                      {f}
+                    </button>
+                  ))}
                 </div>
-                {filteredFinds.length===0 ? (
+                {filteredFinds.length === 0 ? (
                   <div className="empty-state">
                     <div className="empty-icon">📸</div>
                     <div className="empty-title">No finds yet</div>
-                    <div className="empty-sub">{activeFolder==="All"?"Use the Identify tab to snap and save items.":`Nothing saved to "${activeFolder}" yet.`}</div>
+                    <div className="empty-sub">
+                      {activeFolder === "All"
+                        ? "Use the Identify tab to snap and save items."
+                        : `Nothing saved to "${activeFolder}" yet.`}
+                    </div>
                   </div>
                 ) : (
                   <div className="finds-grid">
-                    {filteredFinds.map(find=>(
+                    {filteredFinds.map((find) => (
                       <div key={find.id} className="find-card">
-                        <img src={find.imageUrl} alt={find.name} className="find-img" />
+                        <img
+                          src={find.imageUrl}
+                          alt={find.name}
+                          className="find-img"
+                        />
                         <div className="find-info">
                           <div className="find-name">{find.name}</div>
-                          <div className="find-price">Resell: {find.resellPrice}</div>
+                          <div className="find-price">
+                            Resell: {find.resellPrice}
+                          </div>
                           <div className="find-meta">{find.folder}</div>
                         </div>
                       </div>
@@ -911,31 +1467,65 @@ export default function App() {
               </>
             )}
 
-            {findsTab==="sales" && (
+            {findsTab === "sales" && (
               <>
-                {savedSales.length===0 ? (
+                {savedSales.length === 0 ? (
                   <div className="empty-state">
                     <div className="empty-icon">❤️</div>
                     <div className="empty-title">No saved sales yet</div>
-                    <div className="empty-sub">Tap the heart on any sale to save it here for later.</div>
-                  </div>
-                ) : savedSales.map(sale=>(
-                  <div key={sale.id} className="saved-sale-card" onClick={()=>{setSelectedSale(sale);setTab("sales");}}>
-                    {sale.photos?.[0]&&<img className="saved-sale-img" src={sale.photos[0]} alt={sale.name||sale.title}/>}
-                    <div className="saved-sale-info">
-                      <div className="saved-sale-title">{sale.name || sale.title}</div>
-                      <div className="saved-sale-city">📍 {sale.city}, {sale.state}</div>
-                      <div className="saved-sale-date">{sale.startDate}{sale.endDate!==sale.startDate?` → ${sale.endDate}`:""}</div>
+                    <div className="empty-sub">
+                      Tap the heart on any sale to save it here for later.
                     </div>
-                    <button className="unsave-btn" onClick={e=>{e.stopPropagation();toggleSaveSale(sale);}}>🗑</button>
                   </div>
-                ))}
+                ) : (
+                  savedSales.map((sale) => (
+                    <div
+                      key={sale.id}
+                      className="saved-sale-card"
+                      onClick={() => {
+                        setSelectedSale(sale);
+                        setTab("sales");
+                      }}
+                    >
+                      {sale.photos?.[0] && (
+                        <img
+                          className="saved-sale-img"
+                          src={sale.photos[0]}
+                          alt={sale.name || sale.title}
+                        />
+                      )}
+                      <div className="saved-sale-info">
+                        <div className="saved-sale-title">
+                          {sale.name || sale.title}
+                        </div>
+                        <div className="saved-sale-city">
+                          📍 {sale.city}, {sale.state}
+                        </div>
+                        <div className="saved-sale-date">
+                          {sale.startDate}
+                          {sale.endDate !== sale.startDate
+                            ? ` → ${sale.endDate}`
+                            : ""}
+                        </div>
+                      </div>
+                      <button
+                        className="unsave-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSaveSale(sale);
+                        }}
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  ))
+                )}
               </>
             )}
           </div>
         )}
 
-        {toast&&<div className="toast">{toast}</div>}
+        {toast && <div className="toast">{toast}</div>}
       </div>
     </>
   );
