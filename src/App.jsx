@@ -689,7 +689,7 @@ export default function App() {
       s.name?.toLowerCase().includes(search.toLowerCase()) ||
       s.city?.toLowerCase().includes(search.toLowerCase()) ||
       s.tags?.some((t) => t.toLowerCase().includes(search.toLowerCase()));
-    return matchFilter && matchRadius && matchSearch;
+    const matchDate = !s.endDate || new Date(s.endDate) >= new Date(); return matchFilter && matchRadius && matchSearch && matchDate;
   });
 
   const isSaleSaved = (id) => savedSales.some((s) => s.id === id);
