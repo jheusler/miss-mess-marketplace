@@ -76,9 +76,7 @@ async function fetchThriftAndAntiques(lat, lng, radiusMiles) {
     });
 }
 
-// Generate gateway cards for active sales — links to live search on real platforms
-// (Craigslist and EstateSales.net block all browser CORS proxies; gateway cards are
-//  the reliable alternative for a static app — one tap opens a live pre-filtered search.)
+// Generate gateway cards for active sales
 function generateGatewaySales(lat, lng, cityLabel) {
   const city = cityLabel.replace(", MO", "").replace(", IL", "").trim();
   const clBase = "https://stlouis.craigslist.org/search/gss";
@@ -416,15 +414,20 @@ function saveToStorage(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
+// St. Louis city center — used as fallback until real geolocation succeeds
+const STL_LAT = 38.6270;
+const STL_LNG = -90.1994;
+
 export default function App() {
   const [tab, setTab] = useState("sales");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [radius, setRadius] = useState(10);
-  const [locationLabel, setLocationLabel] = useState("Tap to find sales near you");
-  const [locationStatus, setLocationStatus] = useState("idle");
-  const [userLat, setUserLat] = useState(null);
-  const [userLng, setUserLng] = useState(null);
+  // Start with St. Louis fallback so feed loads immediately
+  const [locationLabel, setLocationLabel] = useState("St. Louis, MO");
+  const [locationStatus, setLocationStatus] = useState("located");
+  const [userLat, setUserLat] = useState(STL_LAT);
+  const [userLng, setUserLng] = useState(STL_LNG);
   const [sales, setSales] = useState([]);
   const [salesLoading, setSalesLoading] = useState(false);
   const [salesSources, setSalesSources] = useState({ thrift: 0, garage: 0, estate: 0 });
@@ -447,19 +450,62 @@ export default function App() {
   useEffect(() => { saveToStorage("mmm_saved_sales", savedSales); }, [savedSales]);
   useEffect(() => { saveToStorage("mmm_saved_finds", savedFinds); }, [savedFinds]);
 
-  // Auto-request location on first load
-  useEffect(() => { getLocation(); }, []);
+  // Attempt real geolocation in background on first load — feed already visible with STL fallback
+  useEffect(() => { getLocationBackground(); }, []);
 
-  // Re-fetch real listings whenever location or radius changes
+  // Re-fetch listings whenever location or radius changes
   useEffect(() => {
     if (userLat === null || userLng === null) return;
     setSalesLoading(true);
     setSales([]);
-    Promise.all([fetch("./sales.json").then(r=>r.json()).catch(()=>[]),fetchThriftAndAntiques(userLat,userLng,radius).catch(()=>[])]).then(([estate,thrift])=>{const R=3958.8;const withDist=estate.map(s=>{const dLat=(s.latitude-userLat)*Math.PI/180;const dLng=(s.longitude-userLng)*Math.PI/180;const a=Math.sin(dLat/2)**2+Math.cos(userLat*Math.PI/180)*Math.cos(s.latitude*Math.PI/180)*Math.sin(dLng/2)**2;s.distance=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));return s;});const all=[...withDist,...thrift].sort((a,b)=>a.distance-b.distance);setSales(all);setSalesSources({thrift:thrift.length,garage:0,estate:withDist.length});}).finally(()=>setSalesLoading(false));
-  }, [userLat, userLng, radius, locationLabel]);
+    Promise.all([
+      fetch("./sales.json").then(r => r.json()).catch(() => []),
+      fetchThriftAndAntiques(userLat, userLng, radius).catch(() => [])
+    ]).then(([estate, thrift]) => {
+      const withDist = estate.map(s => {
+        const dLat = (s.latitude - userLat) * Math.PI / 180;
+        const dLng = (s.longitude - userLng) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(userLat*Math.PI/180)*Math.cos(s.latitude*Math.PI/180)*Math.sin(dLng/2)**2;
+        s.distance = 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return s;
+      });
+      const all = [...withDist, ...thrift].sort((a, b) => a.distance - b.distance);
+      setSales(all);
+      setSalesSources({ thrift: thrift.length, garage: 0, estate: withDist.length });
+    }).finally(() => setSalesLoading(false));
+  }, [userLat, userLng, radius]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
+  // Background geolocation — updates location silently without blocking the feed
+  const getLocationBackground = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setUserLat(latitude);
+        setUserLng(longitude);
+        setLocationStatus("locating");
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const data = await res.json();
+          const city = data.address?.city || data.address?.town || data.address?.village || "Your area";
+          const state = data.address?.state_code || "";
+          setLocationLabel(`${city}${state ? ", " + state : ""}`);
+        } catch {
+          setLocationLabel(`${latitude.toFixed(3)}, ${longitude.toFixed(3)}`);
+        }
+        setLocationStatus("located");
+      },
+      () => {
+        // Geolocation failed — silently keep St. Louis fallback, no error shown
+        setLocationStatus("located");
+      },
+      { timeout: 10000 }
+    );
+  };
+
+  // Manual retry when user taps location bar
   const getLocation = () => {
     if (!navigator.geolocation) { setLocationStatus("error"); setLocationLabel("Geolocation not supported"); return; }
     setLocationStatus("locating");
@@ -491,11 +537,11 @@ export default function App() {
   const isToday   = (s) => s.startDate===today||(s.endDate>=today&&s.startDate<=today);
 
   const filteredSales = sales.filter(s => {
-    const matchFilter = filter==="all"||s.type===filter|| (filter==="estate"&&s.type==="auction");
+    const matchFilter = filter==="all"||s.type===filter||(filter==="estate"&&s.type==="auction");
     const matchRadius = s.distance<=radius;
     const matchSearch = !search||
-      s.name.toLowerCase().includes(search.toLowerCase())||
-      s.city.toLowerCase().includes(search.toLowerCase())||
+      s.name?.toLowerCase().includes(search.toLowerCase())||
+      s.city?.toLowerCase().includes(search.toLowerCase())||
       s.tags?.some(t=>t.toLowerCase().includes(search.toLowerCase()));
     return matchFilter&&matchRadius&&matchSearch;
   });
@@ -609,26 +655,24 @@ export default function App() {
                 <div className="feed-loading">
                   <div className="feed-spinner" />
                   <div className="feed-loading-text">Finding sales near you…</div>
-                  <div className="feed-loading-sub">Checking Craigslist, EstateSales.net & local shops</div>
+                  <div className="feed-loading-sub">Checking EstateSales.net & local shops</div>
                 </div>
               ) : filteredSales.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-icon">{locationStatus==="idle"?"📍":"🔍"}</div>
-                  <div className="empty-title">{locationStatus==="idle"?"Enable location to find sales":"No sales found nearby"}</div>
-                  <div className="empty-sub">{locationStatus==="idle"?"Tap the location bar above to find real listings near you.":"Try expanding your radius or a different filter."}</div>
+                  <div className="empty-icon">🔍</div>
+                  <div className="empty-title">No sales found nearby</div>
+                  <div className="empty-sub">Try expanding your radius or a different filter.</div>
                 </div>
               ) : (
                 <>
-                  {/* Live data source summary */}
                   <div className="source-banner">
                     <span>📡</span>
                     <span className="source-banner-text">
                       Live: {salesSources.estate > 0 ? `${salesSources.estate} estate sale${salesSources.estate!==1?"s":""}, ` : ""}
-                      {salesSources.garage > 0 ? `${salesSources.garage} garage sale${salesSources.garage!==1?"s":""}, ` : ""}
                       {salesSources.thrift > 0 ? `${salesSources.thrift} thrift/antique store${salesSources.thrift!==1?"s":""} ` : ""}
-                      near you
+                      near {locationLabel}
                     </span>
-                    <button className="source-banner-link" onClick={() => window.open("https://www.estatesales.net/MO/St-Louis","_blank")}>+ Estate Sales</button>
+                    <button className="source-banner-link" onClick={() => window.open("https://www.estatesales.net/MO/St-Louis","_blank")}>+ More</button>
                   </div>
 
                   {filteredSales.map(sale => (
@@ -649,7 +693,7 @@ export default function App() {
                             </button>
                           </div>
                         </div>
-                        <div className="card-title">{sale.title}</div>
+                        <div className="card-title">{sale.name || sale.title}</div>
                         <div className="card-loc">
                           <span style={{fontSize:13}}>📍</span>
                           <span className="card-loc-text">{sale.address}, {sale.city}</span>
@@ -680,7 +724,7 @@ export default function App() {
           <div className="detail-page">
             <div className="detail-nav">
               <button className="back-btn" onClick={() => setSelectedSale(null)}>‹</button>
-              <span className="detail-nav-title">{selectedSale.title}</span>
+              <span className="detail-nav-title">{selectedSale.name || selectedSale.title}</span>
               <button className="detail-heart" onClick={() => toggleSaveSale(selectedSale)}>
                 {isSaleSaved(selectedSale.id)?"❤️":"🤍"}
               </button>
@@ -693,7 +737,7 @@ export default function App() {
                 <div className={`type-badge ${selectedSale.type}`}>{typeIcon(selectedSale.type)} {typeLabel(selectedSale.type)}</div>
                 <span className="dist-pill">📍 {selectedSale.distance.toFixed(1)} miles away</span>
               </div>
-              <div className="detail-title">{selectedSale.title}</div>
+              <div className="detail-title">{selectedSale.name || selectedSale.title}</div>
 
               <div className="info-card">
                 <div className="info-row">
@@ -728,7 +772,7 @@ export default function App() {
 
               <div className="detail-section">
                 <div className="detail-section-title">⚡ Negotiation Tips</div>
-                {NEGOTIATION_TIPS[selectedSale.type].map((tip,i) => (
+                {(NEGOTIATION_TIPS[selectedSale.type] || NEGOTIATION_TIPS.estate).map((tip,i) => (
                   <div key={i} className="tip-row">
                     <div className="tip-bullet">{i+1}</div>
                     <div className="tip-text">{tip}</div>
@@ -848,7 +892,7 @@ export default function App() {
                   <div className="empty-state">
                     <div className="empty-icon">📸</div>
                     <div className="empty-title">No finds yet</div>
-                    <div className="empty-sub">{activeFolder==="All"?"Use the Identify tab to snap and save items.": `Nothing saved to "${activeFolder}" yet.`}</div>
+                    <div className="empty-sub">{activeFolder==="All"?"Use the Identify tab to snap and save items.":`Nothing saved to "${activeFolder}" yet.`}</div>
                   </div>
                 ) : (
                   <div className="finds-grid">
@@ -877,9 +921,9 @@ export default function App() {
                   </div>
                 ) : savedSales.map(sale=>(
                   <div key={sale.id} className="saved-sale-card" onClick={()=>{setSelectedSale(sale);setTab("sales");}}>
-                    {sale.photos?.[0]&&<img className="saved-sale-img" src={sale.photos[0]} alt={sale.title}/>}
+                    {sale.photos?.[0]&&<img className="saved-sale-img" src={sale.photos[0]} alt={sale.name||sale.title}/>}
                     <div className="saved-sale-info">
-                      <div className="saved-sale-title">{sale.title}</div>
+                      <div className="saved-sale-title">{sale.name || sale.title}</div>
                       <div className="saved-sale-city">📍 {sale.city}, {sale.state}</div>
                       <div className="saved-sale-date">{sale.startDate}{sale.endDate!==sale.startDate?` → ${sale.endDate}`:""}</div>
                     </div>
