@@ -421,6 +421,11 @@ const css = `
   @keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(10px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
   @keyframes toastOut { to { opacity:0; transform:translateX(-50%) translateY(10px); } }
   input[type="file"] { display:none; }
+  .addr-search-row { display:flex; gap:8px; margin-bottom:10px; }
+  .addr-search-input { flex:1; border:1px solid var(--border-strong); background:var(--surface); border-radius:12px; padding:10px 14px; font-size:13px; color:var(--text); outline:none; font-family:'DM Sans',sans-serif; }
+  .addr-search-input::placeholder { color:var(--text-muted); }
+  .addr-go-btn { padding:10px 18px; background:var(--forest); color:var(--cream); border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; font-family:'DM Sans',sans-serif; white-space:nowrap; transition:all 0.2s; }
+  .addr-go-btn:hover { background:var(--forest-light); }
 `;
 
 const fileToBase64 = (file) =>
@@ -500,7 +505,7 @@ export default function App() {
   const [tab, setTab] = useState("sales");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [radius, setRadius] = useState(10);
+  const [radius, setRadius] = useState(25);
   // Start with St. Louis fallback so feed loads immediately
   const [locationLabel, setLocationLabel] = useState("St. Louis, MO");
   const [locationStatus, setLocationStatus] = useState("located");
@@ -529,6 +534,7 @@ export default function App() {
   const [activeFolder, setActiveFolder] = useState("All");
   const [dragOver, setDragOver] = useState(false);
   const [findsTab, setFindsTab] = useState("items");
+  const [addrInput, setAddrInput] = useState("");
 
   const fileRef = useRef();
   const cameraRef = useRef();
@@ -566,6 +572,14 @@ export default function App() {
               Math.cos((s.latitude * Math.PI) / 180) *
               Math.sin(dLng / 2) ** 2;
           s.distance = 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          // Normalize JSON fields to match card/detail expectations
+          if (!s.photos) s.photos = s.imageUrl ? [s.imageUrl] : [];
+          if (!s.url) s.url = s.listingUrl || s.auctionUrl || "";
+          if (!s.source) s.source = s.orgName || "EstateSales.net";
+          if (s.featured === undefined) s.featured = s.isFeatured || false;
+          // Normalize ISO dates to YYYY-MM-DD for isToday comparisons
+          if (s.startDate?.includes("T")) s.startDate = s.startDate.split("T")[0];
+          if (s.endDate?.includes("T")) s.endDate = s.endDate.split("T")[0];
           return s;
         });
         const all = [...withDist, ...thrift].sort(
@@ -600,13 +614,16 @@ export default function App() {
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
           );
           const data = await res.json();
-          const city =
-            data.address?.city ||
-            data.address?.town ||
-            data.address?.village ||
-            "Your area";
-          const state = data.address?.state_code || "";
-          setLocationLabel(`${city}${state ? ", " + state : ""}`);
+          const addr = data.address || {};
+          const street = [addr.house_number, addr.road].filter(Boolean).join(" ");
+          const city = addr.city || addr.town || addr.village || "";
+          const state = addr.state_code || "";
+          const label = street && city
+            ? `${street}, ${city}`
+            : city
+              ? `${city}${state ? ", " + state : ""}`
+              : `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+          setLocationLabel(label);
         } catch {
           setLocationLabel(`${latitude.toFixed(3)}, ${longitude.toFixed(3)}`);
         }
@@ -618,6 +635,25 @@ export default function App() {
       },
       { timeout: 10000 },
     );
+  };
+
+  const addrSearch = async () => {
+    const q = addrInput.trim();
+    if (!q) return;
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=us`,
+      );
+      const data = await res.json();
+      if (!data.length) { showToast("Address not found"); return; }
+      const { lat, lon, display_name } = data[0];
+      setUserLat(parseFloat(lat));
+      setUserLng(parseFloat(lon));
+      setLocationLabel(display_name.split(",").slice(0, 2).join(",").trim());
+      setLocationStatus("located");
+    } catch {
+      showToast("Address not found");
+    }
   };
 
   // Manual retry when user taps location bar
@@ -639,13 +675,16 @@ export default function App() {
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
           );
           const data = await res.json();
-          const city =
-            data.address?.city ||
-            data.address?.town ||
-            data.address?.village ||
-            "Your area";
-          const state = data.address?.state_code || "";
-          setLocationLabel(`${city}${state ? ", " + state : ""}`);
+          const addr = data.address || {};
+          const street = [addr.house_number, addr.road].filter(Boolean).join(" ");
+          const city = addr.city || addr.town || addr.village || "";
+          const state = addr.state_code || "";
+          const label = street && city
+            ? `${street}, ${city}`
+            : city
+              ? `${city}${state ? ", " + state : ""}`
+              : `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+          setLocationLabel(label);
         } catch {
           setLocationLabel(`${latitude.toFixed(3)}, ${longitude.toFixed(3)}`);
         }
@@ -872,6 +911,16 @@ export default function App() {
                         : "Retry"}
                 </span>
               </div>
+              <div className="addr-search-row">
+                <input
+                  className="addr-search-input"
+                  placeholder="Enter an address…"
+                  value={addrInput}
+                  onChange={(e) => setAddrInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addrSearch()}
+                />
+                <button className="addr-go-btn" onClick={addrSearch}>Go</button>
+              </div>
               <div className="radius-row">
                 <span className="radius-label">Within</span>
                 {RADIUS_OPTIONS.map((r) => (
@@ -1029,7 +1078,14 @@ export default function App() {
                         </div>
                         <div className="card-loc">
                           <span style={{ fontSize: 13 }}>📍</span>
-                          <span className="card-loc-text">
+                          <span
+                            className="card-loc-text"
+                            style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open("https://maps.apple.com/?q=" + encodeURIComponent(`${sale.address}, ${sale.city}`), "_blank");
+                            }}
+                          >
                             {sale.address}, {sale.city}
                           </span>
                           <span className="dist-pill">
@@ -1109,11 +1165,18 @@ export default function App() {
               </div>
 
               <div className="info-card">
-                <div className="info-row">
+                <div
+                  className="info-row"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => {
+                    const fullAddress = `${selectedSale.address}, ${selectedSale.city}, ${selectedSale.state} ${selectedSale.zip}`;
+                    window.open("https://maps.apple.com/?q=" + encodeURIComponent(fullAddress), "_blank");
+                  }}
+                >
                   <div className="info-icon">📍</div>
                   <div>
                     <div className="info-label">Address</div>
-                    <div className="info-value">
+                    <div className="info-value" style={{ color: "var(--terracotta)" }}>
                       {selectedSale.address}, {selectedSale.city},{" "}
                       {selectedSale.state} {selectedSale.zip}
                     </div>
