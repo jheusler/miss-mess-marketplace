@@ -1,19 +1,36 @@
-name: Daily Scrape
+name: Scrape Sales Data
+
 on:
   schedule:
-    - cron: "0 13,20 * * *"
-  workflow_dispatch:
+    - cron: '0 */2 * * 5,6,0'   # every 2hrs Fri/Sat/Sun (UTC)
+    - cron: '0 14 * * 4'        # Thu 9am CT — full refresh before the weekend
+    - cron: '0 14 * * 1,2,3'    # Mon–Wed once daily at 9am CT
+  workflow_dispatch:             # manual run from GitHub UI anytime
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
-      - run: npm ci
-      - run: node scraper-test.mjs
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          file_pattern: public/sales.json
-          commit_message: Fresh data
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium for Puppeteer
+        run: npx puppeteer browsers install chrome
+
+      - name: Run scraper
+        run: node scraper-test.mjs
+
+      - name: Commit updated sales.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/sales.json
+          git diff --staged --quiet || git commit -m "data: refresh sales listings $(date -u +'%b %-d')"
+          git push
