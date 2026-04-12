@@ -7,6 +7,9 @@ on:
     - cron: '0 14 * * 1,2,3'    # Mon–Wed once daily at 9am CT
   workflow_dispatch:             # manual run from GitHub UI anytime
 
+permissions:
+  contents: write               # required to commit and push sales.json
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
