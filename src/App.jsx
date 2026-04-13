@@ -16,6 +16,8 @@ const FOLDERS = [
   "Electronics",
 ];
 const MAX_PHOTOS = 4;
+const storedKey = localStorage.getItem("mmm_anthropic_key");
+if (storedKey) window.__ANTHROPIC_KEY__ = storedKey;
 const FILTERS = ["all", "estate", "garage", "thrift"];
 const RADIUS_OPTIONS = [5, 10, 25, 50];
 const NEGOTIATION_TIPS = {
@@ -556,43 +558,34 @@ export default function App() {
     if (userLat === null || userLng === null) return;
     setSalesLoading(true);
     setSales([]);
-    Promise.all([
-      fetch("./sales.json")
-        .then((r) => r.json())
-        .catch(() => []),
-      fetchThriftAndAntiques(userLat, userLng, radius).catch(() => []),
-    ])
-      .then(([estate, thrift]) => {
-        const withDist = estate.map((s) => {
-          const dLat = ((s.latitude - userLat) * Math.PI) / 180;
-          const dLng = ((s.longitude - userLng) * Math.PI) / 180;
-          const a =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos((userLat * Math.PI) / 180) *
-              Math.cos((s.latitude * Math.PI) / 180) *
-              Math.sin(dLng / 2) ** 2;
-          s.distance = 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          // Normalize JSON fields to match card/detail expectations
-          if (!s.photos) s.photos = s.imageUrl ? [s.imageUrl] : [];
-          if (!s.url) s.url = s.listingUrl || s.auctionUrl || "";
-          if (!s.source) s.source = s.orgName || "EstateSales.net";
-          if (s.featured === undefined) s.featured = s.isFeatured || false;
-          // Normalize ISO dates to YYYY-MM-DD for isToday comparisons
-          if (s.startDate?.includes("T")) s.startDate = s.startDate.split("T")[0];
-          if (s.endDate?.includes("T")) s.endDate = s.endDate.split("T")[0];
-          return s;
-        });
-        const all = [...withDist, ...thrift].sort(
-          (a, b) => a.distance - b.distance,
-        );
-        setSales(all);
-        setSalesSources({
-          thrift: thrift.length,
-          garage: 0,
-          estate: withDist.length,
-        });
-      })
-      .finally(() => setSalesLoading(false));
+
+    // Normalize distance + fields for estate sale records
+    const normalize = (arr) => arr.map((s) => {
+      const dLat = ((s.latitude - userLat) * Math.PI) / 180;
+      const dLng = ((s.longitude - userLng) * Math.PI) / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos((userLat * Math.PI) / 180) * Math.cos((s.latitude * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+      s.distance = 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      if (!s.photos) s.photos = s.imageUrl ? [s.imageUrl] : [];
+      if (!s.url) s.url = s.listingUrl || s.auctionUrl || "";
+      if (!s.source) s.source = s.orgName || "EstateSales.net";
+      if (s.featured === undefined) s.featured = s.isFeatured || false;
+      if (s.startDate?.includes("T")) s.startDate = s.startDate.split("T")[0];
+      if (s.endDate?.includes("T")) s.endDate = s.endDate.split("T")[0];
+      return s;
+    });
+
+    // Load estate sales immediately — never block on Overpass
+    fetch("./sales.json").then((r) => r.json()).catch(() => []).then((estate) => {
+      const withDist = normalize(estate).sort((a, b) => a.distance - b.distance);
+      setSales(withDist);
+      setSalesSources({ thrift: 0, garage: 0, estate: withDist.length });
+      setSalesLoading(false);
+      // Merge thrift stores silently in background when Overpass responds
+      fetchThriftAndAntiques(userLat, userLng, radius).then((thrift) => {
+        setSales((prev) => [...prev, ...thrift].sort((a, b) => a.distance - b.distance));
+        setSalesSources((prev) => ({ ...prev, thrift: thrift.length }));
+      }).catch(() => {});
+    });
   }, [userLat, userLng, radius]);
 
   const showToast = (msg) => {
@@ -766,6 +759,12 @@ export default function App() {
 
   const analyze = async () => {
     if (!photos.length) return;
+    if (!window.__ANTHROPIC_KEY__) {
+      const key = prompt("Enter your Anthropic API key (saved on this device only):");
+      if (!key) return;
+      window.__ANTHROPIC_KEY__ = key.trim();
+      localStorage.setItem("mmm_anthropic_key", key.trim());
+    }
     setLoading(true);
     setResult(null);
     try {
