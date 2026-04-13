@@ -506,6 +506,7 @@ const STL_LNG = -90.1994;
 export default function App() {
   const [tab, setTab] = useState("sales");
   const [filter, setFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [radius, setRadius] = useState(25);
   // Start with St. Louis fallback so feed loads immediately
@@ -710,6 +711,19 @@ export default function App() {
   const isToday = (s) =>
     s.startDate === today || (s.endDate >= today && s.startDate <= today);
 
+  // Compute this weekend's Sat/Sun as YYYY-MM-DD strings
+  const getWeekendRange = () => {
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun, 6=Sat
+    const sat = new Date(now);
+    sat.setDate(now.getDate() + (day === 0 ? -1 : 6 - day));
+    const sun = new Date(sat);
+    sun.setDate(sat.getDate() + 1);
+    const fmt = (d) => d.toISOString().split("T")[0];
+    return { sat: fmt(sat), sun: fmt(sun) };
+  };
+  const { sat: satStr, sun: sunStr } = getWeekendRange();
+
   const filteredSales = sales.filter((s) => {
     const matchFilter =
       filter === "all" ||
@@ -721,7 +735,13 @@ export default function App() {
       s.name?.toLowerCase().includes(search.toLowerCase()) ||
       s.city?.toLowerCase().includes(search.toLowerCase()) ||
       s.tags?.some((t) => t.toLowerCase().includes(search.toLowerCase()));
-    const matchDate = !s.endDate || new Date(s.endDate) >= new Date(); return matchFilter && matchRadius && matchSearch && matchDate;
+    const matchDate = !s.endDate || new Date(s.endDate) >= new Date();
+    const matchDateFilter =
+      dateFilter === "all" ||
+      (dateFilter === "today" && s.startDate <= today && s.endDate >= today) ||
+      (dateFilter === "weekend" && s.startDate <= sunStr && s.endDate >= satStr) ||
+      (dateFilter === "week" && s.startDate <= d(7) && s.endDate >= today);
+    return matchFilter && matchRadius && matchSearch && matchDate && matchDateFilter;
   });
 
   const isSaleSaved = (id) => savedSales.some((s) => s.id === id);
@@ -971,6 +991,22 @@ export default function App() {
                         : f === "garage"
                           ? "🏷 Garage"
                           : "🛍 Thrift"}
+                  </button>
+                ))}
+              </div>
+              <div className="filter-row" style={{marginTop:"6px"}}>
+                {[
+                  { key: "all", label: "📅 Any Date" },
+                  { key: "today", label: "Today" },
+                  { key: "weekend", label: "This Weekend" },
+                  { key: "week", label: "This Week" },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    className={`filter-chip ${dateFilter === key ? "active-all" : ""}`}
+                    onClick={() => setDateFilter(key)}
+                  >
+                    {label}
                   </button>
                 ))}
               </div>
