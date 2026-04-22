@@ -1,142 +1,100 @@
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { writeFileSync, mkdirSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
 puppeteer.use(StealthPlugin());
 
-function buildListingUrl(sale) {
-  const city = sale.cityName.replace(/ /g, '-');
-  return `https://www.estatesales.net/${sale.stateCode}/${city}/${sale.id}`;
-}
-
-function getSaleType(typeName) {
-  if (typeName === 'EstateSales') return 'estate';
-  if (typeName === 'OnlineOnlyAuctions') return 'auction';
-  return 'estate';
-}
-
-function formatDates(dates) {
-  if (!dates || dates.length === 0) return '';
-  const start = new Date(dates[0].localStartDate._value);
-  const end = new Date(dates[dates.length - 1].localEndDate._value);
-  const opts = { month: 'short', day: 'numeric' };
-  return start.toLocaleDateString('en-US', opts) + ' - ' + end.toLocaleDateString('en-US', opts);
-}
-
-async function scrapeAddress(page, url) {
-  try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    // EstateSales.net shows address in an element with itemprop="streetAddress" or similar
-    const address = await page.evaluate(() => {
-      const el =
-        document.querySelector('[itemprop="streetAddress"]') ||
-        document.querySelector('.address') ||
-        document.querySelector('[class*="address"]');
-      return el ? el.innerText.trim() : '';
-    });
-    return address;
-  } catch {
-    return '';
-  }
-}
-
 async function scrape() {
-  console.log('Launching browser...');
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
-  let byidsBody = null;
+  const captured = [];
 
-  const allRaw = new Map();
-
+  // ─── Intercept all JSON responses from EstateSales ───────────────────────
   page.on('response', async (response) => {
     const url = response.url();
     const ct = response.headers()['content-type'] || '';
-    if (ct.includes('json') && url.includes('byids')) {
+    if (ct.includes('json') && url.includes('estatesales')) {
       try {
-        const batch = JSON.parse(await response.text());
-        batch.forEach(s => { if (!allRaw.has(s.id)) allRaw.set(s.id, s); });
-        console.log(`  Captured batch of ${batch.length} (${allRaw.size} unique so far)`);
-      } catch {}
+        const text = await response.text();
+        captured.push({ url, body: text });
+      } catch (e) {}
     }
   });
 
-  console.log('Loading EstateSales.net STL page...');
+  // ─── Step 1: Load STL listing page ───────────────────────────────────────
+  console.log('Step 1: Loading STL listing page...');
   await page.goto('https://www.estatesales.net/MO/St-Louis', {
     waitUntil: 'networkidle2',
     timeout: 30000
   });
-  await new Promise(r => setTimeout(r, 3000));
+  await new Promise(r => setTimeout(r, 4000));
 
-  // Scroll to bottom repeatedly to trigger lazy-load pagination
-  let prevCount = 0;
-  for (let i = 0; i < 10; i++) {
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await new Promise(r => setTimeout(r, 2500));
-    if (allRaw.size === prevCount) break; // no new listings loaded, stop
-    prevCount = allRaw.size;
-  }
+  // ─── Find the byids call and extract the first sale ID ───────────────────
+  const byidsCall = captured.find(c => c.url.includes('byids'));
+  let firstSaleId = null;
 
-  if (allRaw.size === 0) {
-    await browser.close();
-    console.error('ERROR: No listings captured. Try running again.');
-    process.exit(1);
-  }
-
-  const rawSales = [...allRaw.values()];
-  console.log('Total unique sales captured:', rawSales.length);
-
-  const sales = [];
-  for (const sale of rawSales) {
-    const listingUrl = buildListingUrl(sale);
-    let address = sale.address || '';
-
-    if (!address) {
-      console.log(`  Fetching address for: ${sale.name?.slice(0, 50)}`);
-      address = await scrapeAddress(page, listingUrl);
-      await new Promise(r => setTimeout(r, 1000)); // polite delay
+  if (byidsCall) {
+    try {
+      const sales = JSON.parse(byidsCall.body);
+      if (Array.isArray(sales) && sales.length > 0) {
+        firstSaleId = sales[0].id;
+        console.log('Found sale ID:', firstSaleId);
+        console.log('Sale name:', sales[0].name);
+        console.log('State:', sales[0].stateCode, '| City:', sales[0].cityName);
+      }
+    } catch(e) {
+      console.log('Could not parse byids response:', e.message);
     }
+  }
 
-    sales.push({
-      id: sale.id,
-      name: sale.name,
-      type: getSaleType(sale.typeName),
-      orgName: sale.orgName,
-      address,
-      city: sale.cityName,
-      state: sale.stateCode,
-      zip: sale.postalCodeNumber,
-      latitude: sale.latitude,
-      longitude: sale.longitude,
-      phone: sale.phoneNumbers?.[0] || '',
-      website: sale.orgWebsite || '',
-      auctionUrl: sale.auctionUrl || '',
-      orgLogoUrl: sale.orgLogoUrl || '',
-      pictureCount: sale.pictureCount,
-      imageUrl: sale.mainPicture?.url || '',
-      thumbnailUrl: sale.mainPicture?.thumbnailUrl || '',
-      dateRange: formatDates(sale.dates),
-      startDate: sale.dates?.[0]?.localStartDate?._value || '',
-      endDate: sale.dates?.[sale.dates.length - 1]?.localEndDate?._value || '',
-      isFeatured: sale.isLocallyFeatured || sale.isRegionallyFeaturedThisWeek || sale.isNationallyFeaturedThisWeek,
-      listingUrl,
-      scrapedAt: new Date().toISOString()
+  // ─── Step 2: Navigate to that sale's detail page ─────────────────────────
+  if (firstSaleId) {
+    const detailCaptured = [];
+    const detailPage = await browser.newPage();
+
+    detailPage.on('response', async (response) => {
+      const url = response.url();
+      const ct = response.headers()['content-type'] || '';
+      if (ct.includes('json') && url.includes('estatesales')) {
+        try {
+          const text = await response.text();
+          detailCaptured.push({ url, body: text });
+        } catch (e) {}
+      }
     });
+
+    // Build detail page URL from first sale's data
+    const firstSale = JSON.parse(byidsCall.body)[0];
+    const detailUrl = `https://www.estatesales.net/${firstSale.stateCode}/${firstSale.cityName.replace(/ /g, '-')}/${firstSaleId}`;
+    console.log('\nStep 2: Loading sale detail page:', detailUrl);
+
+    await detailPage.goto(detailUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    await new Promise(r => setTimeout(r, 5000));
+
+    console.log('\n=== DETAIL PAGE API CALLS (' + detailCaptured.length + ' found) ===');
+    detailCaptured.forEach((c, i) => {
+      console.log('--- ' + i + ' ---');
+      console.log('URL:', c.url);
+      // Print full body so we can see ALL available fields
+      console.log('Body:', c.body.slice(0, 1500));
+      console.log('');
+    });
+
+    await detailPage.close();
+  } else {
+    console.log('No sale ID found — cannot load detail page.');
+  }
+
+  // ─── Print listing page summary ──────────────────────────────────────────
+  console.log('\n=== LISTING PAGE: byids CALL SUMMARY ===');
+  if (byidsCall) {
+    try {
+      const sales = JSON.parse(byidsCall.body);
+      console.log('Total sales returned:', sales.length);
+      console.log('\nFirst sale full data:');
+      console.log(JSON.stringify(sales[0], null, 2));
+    } catch(e) {}
   }
 
   await browser.close();
-
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const outputDir = join(__dirname, 'public');
-  mkdirSync(outputDir, { recursive: true });
-  const outputPath = join(outputDir, 'sales.json');
-  writeFileSync(outputPath, JSON.stringify(sales, null, 2));
-
-  console.log(`Saved ${sales.length} sales to public/sales.json`);
-  sales.slice(0, 3).forEach(s => {
-    console.log(` - ${s.name} | ${s.address || '(no address)'} | ${s.dateRange}`);
-  });
 }
 
 scrape().catch(console.error);
