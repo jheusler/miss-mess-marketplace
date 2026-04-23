@@ -1,0 +1,12 @@
+{
+  "_comment": "Save to ~/Library/Application Support/Claude/claude_desktop_config.json on macOS",
+  "_docs": "Get your Zapier API key at https://actions.zapier.com/credentials/",
+  "mcpServers": {
+    "zapier": {
+      "url": "https://actions.zapier.com/mcp/v1/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_ZAPIER_API_KEY_HERE"
+      }
+    }
+  }
+}
